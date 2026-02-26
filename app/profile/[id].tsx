@@ -1,3 +1,16 @@
+// Request status types
+type RequestStatus = "none" | "sent" | "received" | "accepted" | "declined";
+
+// Match detail interface
+interface MatchDetail {
+  criteria: string;
+  icon: string;
+  points: number;
+  matched: boolean;
+  yourPreference: string;
+  theirValue: string;
+}
+
 import { ImageSlider } from "@/components/ImageSlider";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -7,6 +20,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +28,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { IconSymbol } from "../../components/ui/icon-symbol";
 
 const { width } = Dimensions.get("window");
 
@@ -97,6 +110,7 @@ interface Profile {
     nadi: string;
   };
   partnerPreferences: any;
+  images?: string[];
 }
 
 const booleanToYesNo = (value: any | null | undefined): string => {
@@ -110,6 +124,198 @@ export default function ProfileDetailScreen() {
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [requestStatus, setRequestStatus] = useState<RequestStatus>("none");
+  const [showMatchDetails, setShowMatchDetails] = useState(false);
+
+  // User's preferences (dummy data - in real app would come from user's profile)
+  const userPreferences = {
+    minAge: 25,
+    maxAge: 35,
+    minHeightCm: 150,
+    maxHeightCm: 180,
+    religion: "Hindu",
+    caste: "Brahmin",
+    education: "Engineering",
+    city: "Jaipur",
+    state: "Rajasthan",
+    motherTongue: "Gujarati",
+    kundliMatchRequired: true,
+  };
+
+  // Handle sending interest
+  const handleSendInterest = () => {
+    if (!profile) return;
+    Alert.alert(
+      "Send Interest 💝",
+      `Do you want to send an interest to ${profile.personal?.fullName || "this profile"}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send",
+          onPress: () => {
+            setRequestStatus("sent");
+            Alert.alert("Interest Sent! ✨", "Your interest has been sent. They will be notified.");
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle canceling sent request
+  const handleCancelRequest = () => {
+    if (!profile) return;
+    Alert.alert(
+      "Cancel Request",
+      "Are you sure you want to cancel your interest request?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: () => {
+            setRequestStatus("none");
+            Alert.alert("Request Cancelled", "Your interest request has been cancelled.");
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle accepting received request
+  const handleAccept = () => {
+    if (!profile) return;
+    Alert.alert(
+      "Accept Request 💚",
+      "Do you want to accept this interest?",
+      [
+        {
+          text: "Reject",
+          style: "destructive",
+          onPress: () => {
+            setRequestStatus("declined");
+            Alert.alert("Rejected", "You have declined this request.");
+          },
+        },
+        {
+          text: "Accept",
+          onPress: () => {
+            setRequestStatus("accepted");
+            Alert.alert("Request Accepted! 🎉", "You are now connected! You can now message each other.");
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle shortlist
+  const handleShortlist = () => {
+    if (!profile) return;
+    Alert.alert("Shortlisted! ⭐", `${profile.personal?.fullName || "This profile"} has been short-listed.`);
+  };
+
+  // Calculate match details based on the provided logic
+  const calculateMatchDetails = (): MatchDetail[] => {
+    if (!profile) return [];
+
+    const details: MatchDetail[] = [];
+    let score = 0;
+
+    // 🎂 Age (25 points)
+    const profileAge = profile.personal?.age || 0;
+    const ageMatch = profileAge >= userPreferences.minAge && profileAge <= userPreferences.maxAge;
+    if (ageMatch) score += 25;
+    details.push({
+      criteria: "Age",
+      icon: "🎂",
+      points: 25,
+      matched: ageMatch,
+      yourPreference: `${userPreferences.minAge} - ${userPreferences.maxAge} years`,
+      theirValue: `${profileAge} years`,
+    });
+
+    // 📏 Height (15 points)
+    const profileHeight = profile.personal?.heightCm || 0;
+    const heightMatch = profileHeight >= userPreferences.minHeightCm && profileHeight <= userPreferences.maxHeightCm;
+    if (heightMatch) score += 15;
+    details.push({
+      criteria: "Height",
+      icon: "📏",
+      points: 15,
+      matched: heightMatch,
+      yourPreference: `${userPreferences.minHeightCm} - ${userPreferences.maxHeightCm} cm`,
+      theirValue: `${profileHeight} cm`,
+    });
+
+    // 🛕 Religion & Caste (20 points)
+    const religionMatch = profile.religion?.religion === userPreferences.religion;
+    const casteMatch = profile.religion?.caste === userPreferences.caste;
+    const religionCasteMatch = religionMatch && casteMatch;
+    if (religionCasteMatch) score += 20;
+    details.push({
+      criteria: "Religion & Caste",
+      icon: "🛕",
+      points: 20,
+      matched: religionCasteMatch,
+      yourPreference: `${userPreferences.religion}, ${userPreferences.caste}`,
+      theirValue: `${profile.religion?.religion || "N/A"}, ${profile.religion?.caste || "N/A"}`,
+    });
+
+    // 🎓 Education (15 points)
+    const profileEducation = profile.education?.[0]?.degree || "";
+    const educationMatch = profileEducation.toLowerCase().includes(userPreferences.education.toLowerCase());
+    if (educationMatch) score += 15;
+    details.push({
+      criteria: "Education",
+      icon: "🎓",
+      points: 15,
+      matched: educationMatch,
+      yourPreference: userPreferences.education,
+      theirValue: profileEducation || "N/A",
+    });
+
+    // 📍 Location (10 points)
+    const profileCity = profile.addresses?.[0]?.city || "";
+    const profileState = profile.addresses?.[0]?.state || "";
+    const locationMatch = profileCity === userPreferences.city || profileState === userPreferences.state;
+    if (locationMatch) score += 10;
+    details.push({
+      criteria: "Location",
+      icon: "📍",
+      points: 10,
+      matched: locationMatch,
+      yourPreference: `${userPreferences.city}, ${userPreferences.state}`,
+      theirValue: `${profileCity}, ${profileState}`,
+    });
+
+    // 🗣 Mother Tongue (5 points)
+    const motherTongueMatch = profile.personal?.motherTongue === userPreferences.motherTongue;
+    if (motherTongueMatch) score += 5;
+    details.push({
+      criteria: "Mother Tongue",
+      icon: "🗣",
+      points: 5,
+      matched: motherTongueMatch,
+      yourPreference: userPreferences.motherTongue,
+      theirValue: profile.personal?.motherTongue || "N/A",
+    });
+
+    // 🔮 Kundli Matching (10 points)
+    const kundliMatch = userPreferences.kundliMatchRequired && profile.kundli?.manglik === "No";
+    if (kundliMatch) score += 10;
+    details.push({
+      criteria: "Kundli Matching",
+      icon: "🔮",
+      points: 10,
+      matched: kundliMatch,
+      yourPreference: "Manglik: No",
+      theirValue: `Manglik: ${profile.kundli?.manglik || "N/A"}`,
+    });
+
+    return details;
+  };
+
+  const matchDetails = calculateMatchDetails();
+  const matchPercentage = Math.round((matchDetails.reduce((acc, d) => acc + (d.matched ? d.points : 0), 0) / 100) * 100);
 
   useEffect(() => {
     // Hardcoded profile data as per user feedback
@@ -196,6 +402,12 @@ export default function ProfileDetailScreen() {
         nadi: "Madhya",
       },
       partnerPreferences: null,
+      images: [
+        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800",
+        "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800",
+        "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=800",
+        "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800",
+      ],
     };
 
     setProfile(hardcodedProfile);
@@ -240,27 +452,36 @@ export default function ProfileDetailScreen() {
     );
   }
 
-  // Get profile image
-  const profileImage = profile.personal?.profileImage;
-  const coverImage = profileImage || "https://via.placeholder.com/400x300";
+  // Get profile images for slider
+  const profileImages = profile.images && profile.images.length > 0 
+    ? profile.images 
+    : [profile.personal?.profileImage || "https://via.placeholder.com/400x300"];
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Cover Image */}
-        <View style={styles.coverContainer}>
-          <Image 
-            source={{ uri: coverImage }} 
-            style={styles.coverImage}
+        {/* Image Slider */}
+        <View style={styles.sliderContainer}>
+          <ImageSlider 
+            images={profileImages} 
+            height={400}
+            showIndicators={true}
           />
-          <View style={styles.coverOverlay} />
           
-          {/* Back Button */}
+          {/* Back Button Overlay */}
           <TouchableOpacity 
             style={styles.backButtonOverlay}
             onPress={() => router.back()}
           >
             <Text style={styles.backButtonOverlayText}>←</Text>
+          </TouchableOpacity>
+
+          {/* Match Percentage Badge - Clickable */}
+          <TouchableOpacity 
+            style={styles.matchBadge}
+            onPress={() => setShowMatchDetails(true)}
+          >
+            <Text style={styles.matchBadgeText}>{matchPercentage}% Match</Text>
           </TouchableOpacity>
         </View>
 
@@ -268,12 +489,12 @@ export default function ProfileDetailScreen() {
         <View style={styles.profileHeaderCard}>
           <View style={styles.avatarContainer}>
             <Image 
-              source={{ uri: profileImage || "https://via.placeholder.com/100" }} 
+              source={{ uri: profile.personal?.profileImage || "https://via.placeholder.com/100" }} 
               style={styles.avatar}
             />
             {profile.isVerified && (
               <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedText}>Verified</Text>
+                <Text style={styles.verifiedText}>✓</Text>
               </View>
             )}
           </View>
@@ -323,31 +544,146 @@ export default function ProfileDetailScreen() {
           </View>
         </View>
 
-        {/* Action Buttons */}
+        {/* Action Buttons - Based on Request Status */}
         <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.rejectButton]}
-          >
-            <Text style={styles.actionButtonIcon}>✕</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.likeButton]}
-            onPress={handleLike}
-          >
-            <Text style={styles.actionButtonIcon}>♥</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.requestButton]}
-            onPress={handleSendRequest}
-          >
-            <Text style={styles.actionButtonIcon}>✓</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.chatButton]}
-            onPress={handleMessage}
-          >
-            <Text style={styles.actionButtonIcon}>💬</Text>
-          </TouchableOpacity>
+          {requestStatus === "none" && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => {
+                  if (profile) {
+                    Alert.alert("Passed", `You passed on ${profile.personal?.fullName || "this profile"}`);
+                  }
+                }}
+              >
+                <Text style={styles.actionButtonIcon}>✕</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.shortlistButton]}
+                onPress={handleShortlist}
+              >
+                <Text style={styles.actionButtonIcon}>⭐</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.interestButton]}
+                onPress={handleSendInterest}
+              >
+                <Text style={styles.actionButtonIcon}>💝</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.chatButton]}
+                onPress={() => {
+                  Alert.alert("Premium", "Upgrade to premium to chat with this user");
+                }}
+              >
+                <Text style={styles.actionButtonIcon}>💬</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {requestStatus === "sent" && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => {
+                  if (profile) {
+                    Alert.alert("Passed", `You passed on ${profile.personal?.fullName || "this profile"}`);
+                  }
+                }}
+              >
+                <Text style={styles.actionButtonIcon}>✕</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.shortlistButton]}
+                onPress={handleShortlist}
+              >
+                <Text style={styles.actionButtonIcon}>⭐</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.sentButton]}
+                onPress={handleCancelRequest}
+              >
+                <Text style={styles.actionButtonIcon}>⏳</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.chatButton]}
+                onPress={() => {
+                  Alert.alert("Premium", "Upgrade to premium to chat with this user");
+                }}
+              >
+                <Text style={styles.actionButtonIcon}>💬</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {requestStatus === "received" && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => {
+                  setRequestStatus("declined");
+                  Alert.alert("Rejected", "You have declined this request");
+                }}
+              >
+                <Text style={styles.actionButtonIcon}>✕</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.acceptButton]}
+                onPress={handleAccept}
+              >
+                <Text style={styles.actionButtonIcon}>✓</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {requestStatus === "accepted" && (
+            <>
+              <View style={styles.connectedBadge}>
+                <Text style={styles.connectedBadgeText}>✓ Connected</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.chatButton]}
+                onPress={handleMessage}
+              >
+                <Text style={styles.actionButtonIcon}>💬</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {requestStatus === "declined" && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => {
+                  if (profile) {
+                    Alert.alert("Passed", `You passed on ${profile.personal?.fullName || "this profile"}`);
+                  }
+                }}
+              >
+                <Text style={styles.actionButtonIcon}>✕</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.shortlistButton]}
+                onPress={handleShortlist}
+              >
+                <Text style={styles.actionButtonIcon}>⭐</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.interestButton]}
+                onPress={handleSendInterest}
+              >
+                <Text style={styles.actionButtonIcon}>💝</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.chatButton]}
+                onPress={() => {
+                  Alert.alert("Premium", "Upgrade to premium to chat with this user");
+                }}
+              >
+                <Text style={styles.actionButtonIcon}>💬</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* About Section */}
@@ -390,7 +726,7 @@ export default function ProfileDetailScreen() {
             profile.education.map((edu: any, index: number) => (
               <View key={index} style={styles.educationItem}>
                 <View style={styles.educationIcon}>
-                  <Text style={styles.educationIconText}>Edu</Text>
+                  <Text style={styles.educationIconText}>🎓</Text>
                 </View>
                 <View style={styles.educationInfo}>
                   <Text style={styles.educationDegree}>{edu.degree}</Text>
@@ -405,7 +741,7 @@ export default function ProfileDetailScreen() {
 
           <View style={styles.workItem}>
             <View style={styles.workIcon}>
-              <Text style={styles.workIconText}>Work</Text>
+              <Text style={styles.workIconText}>💼</Text>
             </View>
             <View style={styles.workInfo}>
               <Text style={styles.workRole}>{profile.professional?.occupation || "Not specified"}</Text>
@@ -520,6 +856,84 @@ export default function ProfileDetailScreen() {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* Match Details Modal */}
+      <Modal
+        visible={showMatchDetails}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowMatchDetails(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Match Details</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowMatchDetails(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.matchScoreContainer}>
+              <Text style={styles.matchScoreText}>{matchPercentage}%</Text>
+              <Text style={styles.matchScoreLabel}>Overall Match</Text>
+            </View>
+
+            <ScrollView style={styles.matchDetailsScroll}>
+              {matchDetails.map((detail, index) => (
+                <View 
+                  key={index} 
+                  style={[
+                    styles.matchDetailItem,
+                    detail.matched ? styles.matchDetailMatched : styles.matchDetailNotMatched
+                  ]}
+                >
+                  <View style={styles.matchDetailHeader}>
+                    <Text style={styles.matchDetailIcon}>{detail.icon}</Text>
+                    <Text style={styles.matchDetailCriteria}>{detail.criteria}</Text>
+                    <View style={[
+                      styles.matchDetailBadge,
+                      detail.matched ? styles.matchedBadge : styles.notMatchedBadge
+                    ]}>
+                      <Text style={[
+                        styles.matchDetailBadgeText,
+                        detail.matched ? styles.matchedBadgeText : styles.notMatchedBadgeText
+                      ]}>
+                        {detail.matched ? `+${detail.points}` : `0`}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.matchDetailContent}>
+                    <View style={styles.matchDetailRow}>
+                      <Text style={styles.matchDetailLabel}>Your Preference:</Text>
+                      <Text style={styles.matchDetailValue}>{detail.yourPreference}</Text>
+                    </View>
+                    <View style={styles.matchDetailRow}>
+                      <Text style={styles.matchDetailLabel}>Their Value:</Text>
+                      <Text style={[
+                        styles.matchDetailValue,
+                        detail.matched ? styles.matchedValue : styles.notMatchedValue
+                      ]}>{detail.theirValue}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={styles.viewMoreButton}
+              onPress={() => {
+                setShowMatchDetails(false);
+                Alert.alert("Premium Feature", "Upgrade to premium to see more detailed match analysis!");
+              }}
+            >
+              <Text style={styles.viewMoreButtonText}>View Full Compatibility Report</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -560,22 +974,8 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
-  coverContainer: {
-    height: 250,
+  sliderContainer: {
     position: "relative",
-  },
-  coverImage: {
-    width: width,
-    height: 250,
-    resizeMode: "cover",
-  },
-  coverOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-    backgroundColor: "rgba(0,0,0,0.3)",
   },
   backButtonOverlay: {
     position: "absolute",
@@ -587,16 +987,37 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 10,
   },
   backButtonOverlayText: {
     fontSize: 20,
     color: "#E91E63",
     fontWeight: "bold",
   },
+  matchBadge: {
+    position: "absolute",
+    top: 40,
+    right: 15,
+    backgroundColor: "#28a745",
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  matchBadgeText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
   profileHeaderCard: {
     backgroundColor: "#fff",
     marginHorizontal: 15,
-    marginTop: -70,
+    marginTop: -30,
     borderRadius: 16,
     padding: 20,
     alignItems: "center",
@@ -622,13 +1043,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
     backgroundColor: "#28a745",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   verifiedText: {
     color: "#fff",
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: "bold",
   },
   profileName: {
@@ -739,6 +1164,38 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#007bff",
   },
+  shortlistButton: {
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#FFD700",
+  },
+  interestButton: {
+    backgroundColor: "#E91E63",
+    borderWidth: 2,
+    borderColor: "#E91E63",
+  },
+  sentButton: {
+    backgroundColor: "#6c757d",
+    borderWidth: 2,
+    borderColor: "#6c757d",
+  },
+  acceptButton: {
+    backgroundColor: "#28a745",
+    borderWidth: 2,
+    borderColor: "#28a745",
+  },
+  connectedBadge: {
+    backgroundColor: "#e8f5e9",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginRight: 10,
+  },
+  connectedBadgeText: {
+    color: "#28a745",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
   actionButtonIcon: {
     fontSize: 20,
     fontWeight: "bold",
@@ -809,9 +1266,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   educationIconText: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: "#1976d2",
+    fontSize: 16,
   },
   educationInfo: {
     flex: 1,
@@ -845,9 +1300,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   workIconText: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: "#388e3c",
+    fontSize: 16,
   },
   workInfo: {
     flex: 1,
@@ -995,5 +1448,149 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 30,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 40,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#f0f0f0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeButtonText: {
+    fontSize: 16,
+    color: "#666",
+    fontWeight: "bold",
+  },
+  matchScoreContainer: {
+    alignItems: "center",
+    paddingVertical: 20,
+    backgroundColor: "#f8f9fa",
+  },
+  matchScoreText: {
+    fontSize: 48,
+    fontWeight: "bold",
+    color: "#28a745",
+  },
+  matchScoreLabel: {
+    fontSize: 16,
+    color: "#666",
+    marginTop: 4,
+  },
+  matchDetailsScroll: {
+    padding: 20,
+  },
+  matchDetailItem: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  matchDetailMatched: {
+    backgroundColor: "#e8f5e9",
+    borderWidth: 1,
+    borderColor: "#a5d6a7",
+  },
+  matchDetailNotMatched: {
+    backgroundColor: "#ffebee",
+    borderWidth: 1,
+    borderColor: "#ffcdd2",
+  },
+  matchDetailHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  matchDetailIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  matchDetailCriteria: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    flex: 1,
+  },
+  matchDetailBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  matchedBadge: {
+    backgroundColor: "#28a745",
+  },
+  notMatchedBadge: {
+    backgroundColor: "#dc3545",
+  },
+  matchDetailBadgeText: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  matchedBadgeText: {
+    color: "#fff",
+  },
+  notMatchedBadgeText: {
+    color: "#fff",
+  },
+  matchDetailContent: {
+    paddingLeft: 28,
+  },
+  matchDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  matchDetailLabel: {
+    fontSize: 12,
+    color: "#666",
+  },
+  matchDetailValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#333",
+  },
+  matchedValue: {
+    color: "#28a745",
+  },
+  notMatchedValue: {
+    color: "#dc3545",
+  },
+  viewMoreButton: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    backgroundColor: "#E91E63",
+    paddingVertical: 14,
+    borderRadius: 25,
+    alignItems: "center",
+  },
+  viewMoreButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
   },
 });

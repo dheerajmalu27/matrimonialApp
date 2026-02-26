@@ -87,7 +87,7 @@ export default function TabLayout() {
         <IconSymbol
           size={50}
           name="person.circle.fill"
-          color="#FF6B6B"
+          color="#E91E63"
           style={styles.profileImage}
         />
         <View style={styles.profileInfo}>

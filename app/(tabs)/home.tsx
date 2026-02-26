@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: "#FF6B6B",
+    backgroundColor: "#E91E63",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   clearFiltersButton: {
-    backgroundColor: "#FF6B6B",
+    backgroundColor: "#E91E63",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,

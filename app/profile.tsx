@@ -371,23 +371,23 @@ export default function ProfileScreen() {
     );
   }
 
-  // Get profile image for cover
-  const profileImage = profile.personal?.profileImage;
-  const coverImage = profileImage || "https://via.placeholder.com/400x200";
+  // Get profile images for slider
+  const profileImage = profile.personal?.profileImage || "https://randomuser.me/api/portraits/women/3.jpg";
+  const profileImages = [profileImage];
 
   return (
     <ThemedView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Cover Image */}
-        <View style={styles.coverContainer}>
-          <Image 
-            source={{ uri: coverImage }} 
-            style={styles.coverImage}
+        {/* Image Slider */}
+        <View style={styles.sliderContainer}>
+          <ImageSlider 
+            images={profileImages} 
+            height={350}
+            showIndicators={true}
           />
-          <View style={styles.coverOverlay} />
           
-          {/* Profile Actions */}
-          <View style={styles.profileActions}>
+          {/* Profile Actions Overlay */}
+          <View style={styles.profileActionsOverlay}>
             <TouchableOpacity 
               style={styles.editProfileBtn}
               onPress={handleEditProfile}
@@ -401,7 +401,7 @@ export default function ProfileScreen() {
         <View style={styles.profileHeaderCard}>
           <View style={styles.avatarContainer}>
             <Image 
-              source={{ uri: profileImage || "https://via.placeholder.com/100" }} 
+              source={{ uri: profileImage }} 
               style={styles.avatar}
             />
             {profile.isVerified && (
@@ -705,24 +705,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 20,
   },
-  coverContainer: {
-    height: 200,
+  sliderContainer: {
     position: "relative",
   },
-  coverImage: {
-    width: width,
-    height: 200,
-    resizeMode: "cover",
-  },
-  coverOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-    backgroundColor: "rgba(0,0,0,0.3)",
-  },
-  profileActions: {
+  profileActionsOverlay: {
     position: "absolute",
     top: 40,
     right: 15,

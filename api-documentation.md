@@ -1,947 +1,1008 @@
-# API Documentation for Matrimonial Application
+# Matrimonial App API Documentation
 
 ## Overview
+This document outlines all the APIs used in the matrimonial application, their usage locations, and recommendations for additional data needed to replace dummy/static data with dynamic content.
 
-This matrimonial/dating application requires **15 APIs** to support its core functionality including user authentication, profile management, matching, and messaging.
+**Base URL:** `http://192.168.1.12:3000/api/v1`
 
-## API Endpoints
+---
 
-### 1. Authentication APIs
+## Table of Contents
+1. [Authentication APIs](#authentication-apis)
+2. [User Profile APIs](#user-profile-apis)
+3. [Matching APIs](#matching-apis)
+4. [Messaging APIs](#messaging-apis)
+5. [Connection Request APIs](#connection-request-apis)
+6. [Settings APIs](#settings-apis)
+7. [Master Data APIs](#master-data-apis)
+8. [Additional Data Recommendations](#additional-data-recommendations)
 
-#### 1.1 Register User
+---
 
-**Endpoint:** `POST /api/auth/register`  
-**Description:** Register a new user account
+## Authentication APIs
 
-**Request Body:**
-
-```json
-{
-  "name": "John Doe",
-  "age": "28",
-  "location": "Mumbai, India",
-  "occupation": "Software Engineer",
-  "bio": "Looking for a life partner who shares similar values",
-  "email": "john.doe@example.com",
-  "phone": "+91 9876543210",
-  "religion": "Hindu",
-  "caste": "Brahmin",
-  "height": "5'10\"",
-  "education": "Bachelor's in Computer Science",
-  "income": "₹8,00,000 - ₹10,00,000",
-  "password": "securepassword123",
-  "confirmPassword": "securepassword123"
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "User registered successfully",
-  "data": {
-    "userId": "user_123",
-    "email": "john.doe@example.com",
-    "name": "John Doe"
-  }
-}
-```
-
-#### 1.2 Login User
-
-**Endpoint:** `POST /api/auth/login`  
-**Description:** Authenticate user and return access token
+### 1. POST /auth/register
+**Used In:** `app/register.tsx`
+- User registration with comprehensive profile data
 
 **Request Body:**
-
-```json
+```
+typescript
 {
-  "email": "john.doe@example.com",
-  "password": "securepassword123"
+  name: string;
+  age: string;
+  location: string;
+  occupation: string;
+  bio: string;
+  email: string;
+  phone: string;
+  religion: string;
+  caste: string;
+  height: string;
+  education: string;
+  income: string;
+  password: string;
+  confirmPassword: string;
 }
 ```
 
-**Response:**
-
-```json
+**Current Response (RegisterResponse):**
+```
+typescript
 {
-  "success": true,
-  "message": "Login successful",
-  "data": {
-    "userId": "user_123",
-    "email": "john.doe@example.com",
-    "name": "John Doe",
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 3600
-  }
+  userId: string;
+  email: string;
+  name: string;
 }
 ```
 
-#### 1.3 Logout User
+**Additional Data Needed:**
+- Profile completion percentage
+- Verification status
+- Welcome message with next steps
 
-**Endpoint:** `POST /api/auth/logout`  
-**Description:** Logout user and invalidate tokens
+---
 
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Logged out successfully"
-}
-```
-
-#### 1.4 Refresh Token
-
-**Endpoint:** `POST /api/auth/refresh`  
-**Description:** Refresh access token using refresh token
+### 2. POST /auth/login
+**Used In:** `app/login.tsx`
+- User login with email and password
 
 **Request Body:**
-
-```json
+```
+typescript
 {
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  email: string;
+  password: string;
 }
 ```
 
-**Response:**
-
-```json
+**Current Response (LoginResponse):**
+```
+typescript
 {
-  "success": true,
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 3600
-  }
+  userId: string;
+  email: string;
+  name: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
 }
 ```
 
-### 2. User Profile APIs
+**Additional Data Needed:**
+- User profile image
+- Profile completion status
+- Last login timestamp
+- Notification count
 
-#### 2.1 Get User Profile
+---
 
-**Endpoint:** `GET /api/users/profile`  
-**Description:** Get current user's profile
+### 3. POST /auth/logout
+**Used In:** `app/profile.tsx`, `app/(tabs)/_layout.tsx`, `app/settings.tsx`
+- Logout user and clear session
 
-**Headers:**
+**Additional Data Needed:**
+- Device token removal
+- Session cleanup confirmation
 
-```
-Authorization: Bearer <access_token>
-```
+---
 
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "user_123",
-    "name": "John Doe",
-    "age": 28,
-    "location": "Mumbai, India",
-    "occupation": "Software Engineer",
-    "bio": "Looking for a life partner who shares similar values",
-    "email": "john.doe@example.com",
-    "phone": "+91 9876543210",
-    "religion": "Hindu",
-    "caste": "Brahmin",
-    "height": "5'10\"",
-    "education": "Bachelor's in Computer Science",
-    "income": "₹8,00,000 - ₹10,00,000",
-    "profileImage": "https://example.com/images/user_123.jpg",
-    "isOnline": true,
-    "lastActive": "2024-01-15T10:30:00Z"
-  }
-}
-```
-
-#### 2.2 Update User Profile
-
-**Endpoint:** `PUT /api/users/profile`  
-**Description:** Update current user's profile
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
+### 4. POST /auth/forgot-password
+**Used In:** `app/forgot-password.tsx`
+- Request password reset OTP
 
 **Request Body:**
-
-```json
+```
+typescript
 {
-  "name": "John Doe",
-  "age": "29",
-  "location": "Delhi, India",
-  "occupation": "Senior Software Engineer",
-  "bio": "Updated bio text",
-  "phone": "+91 9876543210",
-  "height": "5'11\"",
-  "education": "Master's in Computer Science",
-  "income": "₹10,00,000 - ₹12,00,000"
+  email: string;
 }
 ```
 
-**Response:**
+**Additional Data Needed:**
+- OTP expiration time
+- Resend OTP cooldown period
 
-```json
-{
-  "success": true,
-  "message": "Profile updated successfully",
-  "data": {
-    "id": "user_123",
-    "name": "John Doe",
-    "age": 29,
-    "location": "Delhi, India",
-    "occupation": "Senior Software Engineer",
-    "bio": "Updated bio text",
-    "email": "john.doe@example.com",
-    "phone": "+91 9876543210",
-    "religion": "Hindu",
-    "caste": "Brahmin",
-    "height": "5'11\"",
-    "education": "Master's in Computer Science",
-    "income": "₹10,00,000 - ₹12,00,000",
-    "profileImage": "https://example.com/images/user_123.jpg",
-    "updatedAt": "2024-01-15T11:00:00Z"
-  }
-}
-```
+---
 
-#### 2.3 Get Profile by ID
-
-**Endpoint:** `GET /api/users/{userId}/profile`  
-**Description:** Get another user's profile by ID
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "user_456",
-    "name": "Jane Smith",
-    "age": 26,
-    "location": "Pune, India",
-    "occupation": "Doctor",
-    "bio": "Passionate about helping others and finding true love",
-    "religion": "Hindu",
-    "caste": "Kayasth",
-    "height": "5'4\"",
-    "education": "MBBS",
-    "income": "₹6,00,000 - ₹8,00,000",
-    "profileImage": "https://example.com/images/user_456.jpg",
-    "isOnline": false,
-    "lastActive": "2024-01-14T15:30:00Z"
-  }
-}
-```
-
-### 3. Matching APIs
-
-#### 3.1 Get Potential Matches
-
-**Endpoint:** `GET /api/matches/potential`  
-**Description:** Get list of potential matches for the user
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
-
-**Query Parameters:**
-
-- `limit` (optional): Number of matches to return (default: 20)
-- `offset` (optional): Pagination offset (default: 0)
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "matches": [
-      {
-        "id": "user_456",
-        "name": "Jane Smith",
-        "age": 26,
-        "location": "Pune, India",
-        "occupation": "Doctor",
-        "bio": "Passionate about helping others and finding true love",
-        "religion": "Hindu",
-        "caste": "Kayasth",
-        "height": "5'4\"",
-        "education": "MBBS",
-        "profileImage": "https://example.com/images/user_456.jpg",
-        "compatibilityScore": 85
-      },
-      {
-        "id": "user_789",
-        "name": "Priya Patel",
-        "age": 27,
-        "location": "Ahmedabad, India",
-        "occupation": "Teacher",
-        "bio": "Love teaching and exploring new cultures",
-        "religion": "Hindu",
-        "caste": "Patel",
-        "height": "5'6\"",
-        "education": "Master's in Education",
-        "profileImage": "https://example.com/images/user_789.jpg",
-        "compatibilityScore": 78
-      }
-    ],
-    "totalCount": 150,
-    "hasMore": true
-  }
-}
-```
-
-#### 3.2 Like Profile
-
-**Endpoint:** `POST /api/matches/{userId}/like`  
-**Description:** Like another user's profile
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Profile liked successfully",
-  "data": {
-    "likedUserId": "user_456",
-    "isMatch": true,
-    "matchId": "match_123"
-  }
-}
-```
-
-#### 3.3 Dislike Profile
-
-**Endpoint:** `POST /api/matches/{userId}/dislike`  
-**Description:** Dislike another user's profile
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Profile disliked successfully",
-  "data": {
-    "dislikedUserId": "user_456"
-  }
-}
-```
-
-#### 3.4 Get Matches
-
-**Endpoint:** `GET /api/matches`  
-**Description:** Get list of mutual matches
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
-
-**Query Parameters:**
-
-- `limit` (optional): Number of matches to return (default: 20)
-- `offset` (optional): Pagination offset (default: 0)
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "matches": [
-      {
-        "id": "match_123",
-        "user": {
-          "id": "user_456",
-          "name": "Jane Smith",
-          "age": 26,
-          "location": "Pune, India",
-          "occupation": "Doctor",
-          "profileImage": "https://example.com/images/user_456.jpg"
-        },
-        "matchedAt": "2024-01-10T14:30:00Z",
-        "lastMessage": "Hi! We matched!",
-        "unreadCount": 1
-      },
-      {
-        "id": "match_124",
-        "user": {
-          "id": "user_789",
-          "name": "Priya Patel",
-          "age": 27,
-          "location": "Ahmedabad, India",
-          "occupation": "Teacher",
-          "profileImage": "https://example.com/images/user_789.jpg"
-        },
-        "matchedAt": "2024-01-08T09:15:00Z",
-        "lastMessage": null,
-        "unreadCount": 0
-      }
-    ],
-    "totalCount": 5,
-    "hasMore": false
-  }
-}
-```
-
-### 4. Messaging APIs
-
-#### 4.1 Get Conversations
-
-**Endpoint:** `GET /api/messages/conversations`  
-**Description:** Get list of user conversations
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "conversations": [
-      {
-        "id": "conv_123",
-        "participant": {
-          "id": "user_456",
-          "name": "Jane Smith",
-          "profileImage": "https://example.com/images/user_456.jpg",
-          "isOnline": true
-        },
-        "lastMessage": {
-          "id": "msg_789",
-          "text": "Hi! We matched!",
-          "timestamp": "2024-01-15T10:30:00Z",
-          "isRead": false
-        },
-        "unreadCount": 2,
-        "updatedAt": "2024-01-15T10:30:00Z"
-      },
-      {
-        "id": "conv_124",
-        "participant": {
-          "id": "user_789",
-          "name": "Priya Patel",
-          "profileImage": "https://example.com/images/user_789.jpg",
-          "isOnline": false
-        },
-        "lastMessage": {
-          "id": "msg_790",
-          "text": "Thank you for your interest",
-          "timestamp": "2024-01-14T16:45:00Z",
-          "isRead": true
-        },
-        "unreadCount": 0,
-        "updatedAt": "2024-01-14T16:45:00Z"
-      }
-    ]
-  }
-}
-```
-
-#### 4.2 Get Messages for Conversation
-
-**Endpoint:** `GET /api/messages/conversations/{conversationId}`  
-**Description:** Get messages for a specific conversation
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
-
-**Query Parameters:**
-
-- `limit` (optional): Number of messages to return (default: 50)
-- `before` (optional): Get messages before this message ID
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "conversationId": "conv_123",
-    "participant": {
-      "id": "user_456",
-      "name": "Jane Smith",
-      "profileImage": "https://example.com/images/user_456.jpg"
-    },
-    "messages": [
-      {
-        "id": "msg_785",
-        "text": "Hi! I saw your profile and thought we might be a good match!",
-        "timestamp": "2024-01-15T10:00:00Z",
-        "senderId": "user_456",
-        "isRead": true
-      },
-      {
-        "id": "msg_786",
-        "text": "Thank you! I think so too. What made you interested?",
-        "timestamp": "2024-01-15T10:05:00Z",
-        "senderId": "user_123",
-        "isRead": true
-      },
-      {
-        "id": "msg_787",
-        "text": "We both love traveling and have similar career goals.",
-        "timestamp": "2024-01-15T10:10:00Z",
-        "senderId": "user_456",
-        "isRead": true
-      },
-      {
-        "id": "msg_788",
-        "text": "That's great! I'd love to hear more about your recent trips.",
-        "timestamp": "2024-01-15T10:15:00Z",
-        "senderId": "user_123",
-        "isRead": true
-      },
-      {
-        "id": "msg_789",
-        "text": "Sure! Last month I went to Goa. The beaches were amazing.",
-        "timestamp": "2024-01-15T10:30:00Z",
-        "senderId": "user_456",
-        "isRead": false
-      }
-    ],
-    "hasMore": false
-  }
-}
-```
-
-#### 4.3 Send Message
-
-**Endpoint:** `POST /api/messages/conversations/{conversationId}`  
-**Description:** Send a message in a conversation
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
+### 5. POST /auth/reset-password
+**Used In:** `app/forgot-password.tsx`
+- Reset password with OTP
 
 **Request Body:**
-
-```json
+```
+typescript
 {
-  "text": "That sounds wonderful! I've always wanted to visit Goa."
+  email: string;
+  otp: string;
+  newPassword: string;
 }
 ```
 
-**Response:**
+**Additional Data Needed:**
+- Password reset confirmation details
+- Security notification email
 
-```json
-{
-  "success": true,
-  "message": "Message sent successfully",
-  "data": {
-    "messageId": "msg_790",
-    "text": "That sounds wonderful! I've always wanted to visit Goa.",
-    "timestamp": "2024-01-15T10:35:00Z",
-    "conversationId": "conv_123",
-    "senderId": "user_123"
-  }
-}
-```
+---
 
-### 5. Settings APIs
-
-#### 5.1 Get User Settings
-
-**Endpoint:** `GET /api/users/settings`  
-**Description:** Get current user's settings
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "notifications": {
-      "email": true,
-      "push": true,
-      "sms": false
-    },
-    "privacy": {
-      "showOnlineStatus": true,
-      "showLastActive": true,
-      "showProfileTo": "matches_only"
-    },
-    "matchingPreferences": {
-      "ageRange": {
-        "min": 22,
-        "max": 35
-      },
-      "locationRadius": 50,
-      "religion": ["Hindu", "Jain"],
-      "caste": ["Brahmin", "Kayasth"],
-      "education": ["Bachelor's", "Master's", "PhD"],
-      "incomeRange": {
-        "min": 300000,
-        "max": 2000000
-      }
-    },
-    "account": {
-      "language": "en",
-      "timezone": "Asia/Kolkata"
-    }
-  }
-}
-```
-
-#### 5.2 Update User Settings
-
-**Endpoint:** `PUT /api/users/settings`  
-**Description:** Update current user's settings
-
-**Headers:**
-
-```
-Authorization: Bearer <access_token>
-```
+### 6. POST /auth/refresh
+**Used In:** `services/api.ts` (internal)
+- Refresh access token
 
 **Request Body:**
-
-```json
+```
+typescript
 {
-  "notifications": {
-    "email": true,
-    "push": false,
-    "sms": true
-  },
-  "privacy": {
-    "showOnlineStatus": false,
-    "showLastActive": false,
-    "showProfileTo": "everyone"
-  },
-  "matchingPreferences": {
-    "ageRange": {
-      "min": 25,
-      "max": 32
-    },
-    "locationRadius": 30,
-    "religion": ["Hindu"],
-    "caste": ["Brahmin"],
-    "education": ["Master's", "PhD"],
-    "incomeRange": {
-      "min": 500000,
-      "max": 1500000
-    }
-  }
+  refreshToken: string;
 }
 ```
 
-**Response:**
+---
 
-```json
+## User Profile APIs
+
+### 1. GET /users/me/profile
+**Used In:** 
+- `app/profile.tsx`
+- `app/(tabs)/_layout.tsx` (drawer profile)
+
+**Response (UserProfile):**
+```
+typescript
 {
-  "success": true,
-  "message": "Settings updated successfully",
-  "data": {
-    "notifications": {
-      "email": true,
-      "push": false,
-      "sms": true
-    },
-    "privacy": {
-      "showOnlineStatus": false,
-      "showLastActive": false,
-      "showProfileTo": "everyone"
-    },
-    "matchingPreferences": {
-      "ageRange": {
-        "min": 25,
-        "max": 32
-      },
-      "locationRadius": 30,
-      "religion": ["Hindu"],
-      "caste": ["Brahmin"],
-      "education": ["Master's", "PhD"],
-      "incomeRange": {
-        "min": 500000,
-        "max": 1500000
-      }
-    },
-    "account": {
-      "language": "en",
-      "timezone": "Asia/Kolkata"
-    }
-  }
+  id: string;
+  name: string;
+  age: number;
+  location: string;
+  occupation: string;
+  bio: string;
+  images: string[];
+  email: string;
+  phone: string;
+  religion: string;
+  caste: string;
+  height: string;
+  education: string;
+  income: string;
+  isOnline: boolean;
+  lastActive: string;
+  isVerified: boolean;
 }
 ```
 
-### 6. Connection Request APIs
-
-#### 6.1 Send Connection Request
-
-**Endpoint:** `POST /api/requests/send/{userId}`  
-**Description:** Send a connection request to another user
-
-**Headers:**
-
+**Current Backend Structure (More Detailed):**
 ```
-Authorization: Bearer <access_token>
+typescript
+{
+  id: string;
+  email: string;
+  mobile: string;
+  gender: string;
+  isVerified: boolean;
+  isActive: boolean;
+  createdAt: string;
+  personal: {
+    firstName: string;
+    lastName: string;
+    fullName: string;
+    dateOfBirth: string;
+    age: number;
+    birthTime: string;
+    height: string;
+    heightCm: number;
+    weight: string;
+    weightKg: string;
+    maritalStatus: string;
+    motherTongue: string;
+    aboutMe: string;
+    profileImage: string | null;
+  };
+  religion: {
+    religion: string;
+    caste: string;
+    subCaste: string;
+    gotra: string;
+    manglik: string | null;
+  };
+  professional: {
+    occupation: string;
+    annualIncome: string;
+    workLocation: string;
+    employer: string;
+  };
+  education: Array<{
+    degree: string;
+    college: string;
+    university: string;
+    yearOfPassing: number;
+    highest: boolean;
+  }>;
+  addresses: Array<{
+    type: string;
+    city: string;
+    state: string;
+    country: string;
+    pincode: string;
+  }>;
+  family: {
+    fatherName: string;
+    fatherOccupation: string;
+    motherName: string;
+    motherOccupation: string;
+    siblings: string;
+    familyType: string;
+    familyValues: string;
+    familyStatus: string;
+  };
+  lifestyle: {
+    diet: string;
+    smoking: boolean | null;
+    drinking: boolean | null;
+    hobbies: string[];
+    interests: string[];
+  };
+  kundli: {
+    birthPlace: string;
+    birthTime: string;
+    manglik: string;
+    gotra: string;
+    rashi: string;
+    nakshatra: string;
+    charan: string;
+    gan: string;
+    nadi: string;
+  };
+  partnerPreferences: any;
+}
 ```
+
+**Additional Data Needed:**
+- Profile view count
+- Profile likes count
+- Member since date
+- Last profile update timestamp
+- Premium membership status
+- Interest received count
+
+---
+
+### 2. PUT /users/me/profile
+**Used In:** `app/profile.tsx`
+- Update user profile
+
+**Additional Data Needed:**
+- Partial update support
+- Bulk update support
+- Profile update confirmation with changed fields
+
+---
+
+### 3. GET /users/profile/:userId
+**Used In:** `app/profile/[id].tsx`
+- Get another user's profile
+
+**Additional Data Needed:**
+- Connection status with current user
+- Whether user has viewed current user's profile
+- Interest sent/received status
+
+---
+
+### 4. GET /users/me/same-city
+**Used In:** `app/(tabs)/my-city.tsx`
+- Get users from the same city
+
+**Request Parameters:**
+```
+typescript
+{
+  limit: number;
+  offset: number;
+}
+```
+
+**Additional Data Needed:**
+- User's current city detection
+- Distance calculation
+- City-wise filtering
+
+---
+
+### 5. GET /users/settings
+**Used In:** `app/settings.tsx`
+- Get user settings
+
+**Response (UserSettings):**
+```
+typescript
+{
+  notifications: {
+    email: boolean;
+    push: boolean;
+    sms: boolean;
+  };
+  privacy: {
+    showOnlineStatus: boolean;
+    showLastActive: boolean;
+    showProfileTo: string;
+  };
+  matchingPreferences: {
+    ageRange: { min: number; max: number; };
+    locationRadius: number;
+    religion: string[];
+    caste: string[];
+    education: string[];
+    incomeRange: { min: number; max: number; };
+  };
+  account: {
+    language: string;
+    timezone: string;
+  };
+}
+```
+
+**Additional Data Needed:**
+- Setting change history
+- Default settings
+
+---
+
+### 6. PUT /users/settings
+**Used In:** `app/settings.tsx`
+- Update user settings
+
+---
+
+## Matching APIs
+
+### 1. GET /matches/potential
+**Used In:** `app/(tabs)/home.tsx`
+- Get potential matches based on preferences
+
+**Request Parameters:**
+```
+typescript
+{
+  limit: number;
+  offset: number;
+  city?: string;
+  ageMin?: string;
+  ageMax?: string;
+  location?: string;
+  religion?: string;
+  caste?: string;
+  education?: string;
+  occupation?: string;
+  income?: string;
+  heightMin?: string;
+  heightMax?: string;
+}
+```
+
+**Response (PotentialMatchesResponse):**
+```
+typescript
+{
+  matches: PotentialMatch[];
+  totalCount: number;
+  hasMore: boolean;
+}
+```
+
+**Current PotentialMatch Structure:**
+```
+typescript
+{
+  id: string;
+  name: string;
+  age: number;
+  location: string;
+  occupation: string;
+  bio: string;
+  religion: string;
+  caste: string;
+  height: string;
+  education: string;
+  profileImage: string;
+  compatibilityScore: number;
+  isVerified: boolean;
+  lastActive: string;
+}
+```
+
+**Additional Data Needed:**
+- Distance from user
+- Mutual interests
+- Family details summary
+- Education details
+- Profile completeness percentage
+- Online status
+
+---
+
+### 2. GET /matches
+**Used In:** `app/(tabs)/matches.tsx` (Currently using mock data)
+- Get user's matched profiles
+
+**Response (MatchesResponse):**
+```
+typescript
+{
+  matches: Match[];
+  totalCount: number;
+  hasMore: boolean;
+}
+```
+
+**Additional Data Needed:**
+- Last message preview
+- Unread message count
+- Match timestamp
+- Common interests
+
+---
+
+### 3. POST /matches/:userId/like
+**Used In:** `app/(tabs)/home.tsx` (via ProfileCard)
+- Like a profile
+
+**Response (LikeResponse):**
+```
+typescript
+{
+  likedUserId: string;
+  isMatch: boolean;
+  matchId?: string;
+}
+```
+
+**Additional Data Needed:**
+- Match notification
+
+---
+
+### 4. POST /matches/:userId/dislike
+**Used In:** `app/(tabs)/home.tsx` (via ProfileCard)
+- Dislike/pass a profile
+
+**Additional Data Needed:**
+- Undo functionality support
+
+---
+
+## Messaging APIs
+
+### 1. GET /messages/conversations
+**Used In:** `app/(tabs)/messages.tsx`
+- Get all conversations
+
+**Response (ConversationsResponse):**
+```
+typescript
+{
+  conversations: Conversation[];
+}
+```
+
+**Current Conversation Structure:**
+```
+typescript
+{
+  id: string;
+  participant: {
+    id: string;
+    name: string;
+    profileImage?: string;
+    isOnline: boolean;
+  };
+  lastMessage?: {
+    id: string;
+    text: string;
+    timestamp: string;
+    isRead: boolean;
+  };
+  unreadCount: number;
+  updatedAt: string;
+}
+```
+
+**Additional Data Needed:**
+- Typing status
+- Message delivery status
+- Last seen timestamp
+
+---
+
+### 2. GET /messages/conversations/:conversationId
+**Used In:** `app/chat/[id].tsx`
+- Get messages for a specific conversation
+
+**Request Parameters:**
+```typescript
+{
+  limit: number;
+  before?: string;
+}
+```
+
+**Response (ConversationMessagesResponse):**
+```
+typescript
+{
+  conversationId: string;
+  participant: {
+    id: string;
+    name: string;
+    profileImage?: string;
+  };
+  messages: Message[];
+  hasMore: boolean;
+}
+```
+
+**Current Message Structure:**
+```
+typescript
+{
+  id: string;
+  text: string;
+  timestamp: string;
+  senderId: string;
+  isRead: boolean;
+}
+```
+
+**Additional Data Needed:**
+- Message reactions
+- Attachment support (images, documents)
+- Read receipts
+- Message editing support
+
+---
+
+### 3. POST /messages/conversations/:conversationId
+**Used In:** `app/chat/[id].tsx`
+- Send a message
 
 **Request Body:**
-
-```json
+```
+typescript
 {
-  "message": "Hi, I found your profile interesting. Would like to connect."
+  text: string;
 }
 ```
+
+**Response (SendMessageResponse):**
+```
+typescript
+{
+  messageId: string;
+  text: string;
+  timestamp: string;
+  conversationId: string;
+  senderId: string;
+}
+```
+
+**Additional Data Needed:**
+- Message status (sent, delivered, read)
+- Typing indicators
+
+---
+
+## Connection Request APIs
+
+### 1. POST /requests/send/:userId
+**Used In:** `app/profile/[id].tsx` (handleSendInterest)
+- Send connection request
+
+**Request Body:**
+```
+typescript
+{
+  message: string;
+}
+```
+
+**Additional Data Needed:**
+- Request expiry time
+- Reminder notifications
+
+---
+
+### 2. GET /requests/sent
+**Used In:** `app/sent-requests.tsx`
+- Get sent connection requests
+
+**Request Parameters:**
+```
+typescript
+{
+  limit: number;
+  offset: number;
+}
+```
+
+**Response (SentRequestsResponse):**
+```
+typescript
+{
+  requests: SentRequest[];
+  totalCount: number;
+  hasMore: boolean;
+}
+```
+
+**Current SentRequest Structure:**
+```
+typescript
+{
+  id: string;
+  recipient: {
+    id: string;
+    name: string;
+    age: number;
+    location: string;
+    occupation: string;
+    profileImage: string;
+  };
+  message: string;
+  timestamp: string;
+  status: string;
+}
+```
+
+**Additional Data Needed:**
+- View count of profile
+- Last activity of recipient
+
+---
+
+### 3. GET /requests/received
+**Used In:** `app/received-requests.tsx` (Currently using mock data)
+- Get received connection requests
+
+**Request Parameters:**
+```
+typescript
+{
+  limit: number;
+  offset: number;
+}
+```
+
+**Response (ReceivedRequestsResponse):**
+```
+typescript
+{
+  requests: ReceivedRequest[];
+  totalCount: number;
+  hasMore: boolean;
+}
+```
+
+**Current ReceivedRequest Structure:**
+```
+typescript
+{
+  id: string;
+  sender: {
+    id: string;
+    name: string;
+    age: number;
+    location: string;
+    occupation: string;
+    bio: string;
+    religion: string;
+    caste: string;
+    height: string;
+    education: string;
+    income: string;
+    profileImage: string;
+  };
+  message: string;
+  timestamp: string;
+  status: string;
+}
+```
+
+**Additional Data Needed:**
+- Full profile data for swiping
+- More sender details
+
+---
+
+### 4. POST /requests/:requestId/accept
+**Used In:** `app/received-requests.tsx`
+- Accept a connection request
+
+**Response (AcceptRequestResponse):**
+```
+typescript
+{
+  requestId: string;
+  senderId: string;
+  recipientId: string;
+  status: string;
+  acceptedAt: string;
+  conversationId: string;
+}
+```
+
+**Additional Data Needed:**
+- Auto-create conversation
+- Notification to sender
+
+---
+
+### 5. POST /requests/:requestId/decline
+**Used In:** `app/received-requests.tsx`
+- Decline a connection request
+
+**Response (DeclineRequestResponse):**
+```
+typescript
+{
+  requestId: string;
+  senderId: string;
+  recipientId: string;
+  status: string;
+  declinedAt: string;
+}
+```
+
+---
+
+## Settings APIs
+
+### 1. PUT /users/settings
+**Used In:** `app/settings.tsx` (Currently using local state)
+- Update user settings
+
+**Request Body:**
+```
+typescript
+{
+  notifications?: {
+    email?: boolean;
+    push?: boolean;
+    sms?: boolean;
+  };
+  privacy?: {
+    showOnlineStatus?: boolean;
+    showLastActive?: boolean;
+    showProfileTo?: string;
+  };
+  matchingPreferences?: {
+    ageRange?: { min?: number; max?: number; };
+    locationRadius?: number;
+    religion?: string[];
+    caste?: string[];
+    education?: string[];
+    incomeRange?: { min?: number; max?: number; };
+  };
+  account?: {
+    language?: string;
+    timezone?: string;
+  };
+}
+```
+
+---
+
+## Master Data APIs
+
+### 1. GET /master/religions
+**Used In:** `components/UserForm.tsx` (static data)
+- Get list of religions
 
 **Response:**
-
-```json
+```
+typescript
 {
-  "success": true,
-  "message": "Connection request sent successfully",
-  "data": {
-    "requestId": "req_123",
-    "recipientId": "user_456",
-    "senderId": "user_123",
-    "message": "Hi, I found your profile interesting. Would like to connect.",
-    "timestamp": "2024-01-15T10:30:00Z",
-    "status": "pending"
-  }
-}
+  id: string;
+  name: string;
+}[]
 ```
 
-#### 6.2 Get Sent Requests
+**Additional Data Needed:**
+- Sub-religions
+- Associated castes
 
-**Endpoint:** `GET /api/requests/sent`  
-**Description:** Get list of connection requests sent by the current user
+---
 
-**Headers:**
+### 2. GET /master/castes
+**Used In:** `components/UserForm.tsx` (static data)
+- Get list of castes
 
-```
-Authorization: Bearer <access_token>
-```
+**Additional Data Needed:**
+- Filter by religion
+- Sub-castes
 
-**Query Parameters:**
+---
 
-- `limit` (optional): Number of requests to return (default: 20)
-- `offset` (optional): Pagination offset (default: 0)
+### 3. GET /master/education
+**Used In:** `components/UserForm.tsx` (static data)
+- Get education levels
 
-**Response:**
+**Additional Data Needed:**
+- Fields of study
+- Universities/Colleges
 
-```json
-{
-  "success": true,
-  "data": {
-    "requests": [
-      {
-        "id": "req_123",
-        "recipient": {
-          "id": "user_456",
-          "name": "Jane Smith",
-          "age": 26,
-          "location": "Pune, India",
-          "occupation": "Doctor",
-          "profileImage": "https://example.com/images/user_456.jpg"
-        },
-        "message": "Hi, I found your profile interesting. Would like to connect.",
-        "timestamp": "2024-01-15T10:30:00Z",
-        "status": "pending"
-      },
-      {
-        "id": "req_124",
-        "recipient": {
-          "id": "user_789",
-          "name": "Priya Patel",
-          "age": 27,
-          "location": "Ahmedabad, India",
-          "occupation": "Teacher",
-          "profileImage": "https://example.com/images/user_789.jpg"
-        },
-        "message": "Hello! Your profile caught my attention. Let's chat!",
-        "timestamp": "2024-01-14T16:45:00Z",
-        "status": "accepted"
-      }
-    ],
-    "totalCount": 5,
-    "hasMore": false
-  }
-}
-```
+---
 
-#### 6.3 Get Received Requests
+### 4. GET /master/occupations
+**Used In:** `components/UserForm.tsx` (static data)
+- Get list of occupations
 
-**Endpoint:** `GET /api/requests/received`  
-**Description:** Get list of connection requests received by the current user
+**Additional Data Needed:**
+- Job categories
+- Industry types
 
-**Headers:**
+---
 
-```
-Authorization: Bearer <access_token>
-```
+### 5. GET /master/income-ranges
+**Used In:** `components/UserForm.tsx` (static data)
+- Get income ranges
 
-**Query Parameters:**
+---
 
-- `limit` (optional): Number of requests to return (default: 20)
-- `offset` (optional): Pagination offset (default: 0)
+## Additional Data Recommendations
 
-**Response:**
+### For Home Screen (Potential Matches)
+| Field | Purpose | Priority |
+|-------|---------|----------|
+| `distance` | Show how far the match is | High |
+| `mutualInterests[]` | Common hobbies/interests | High |
+| `profileViews` | Number of profile views | Medium |
+| `isOnline` | Current online status | High |
+| `lastActive` | When user was last active | High |
+| `familyType` | Nuclear/Joint family | Medium |
+| `motherTongue` | Language preference | Medium |
 
-```json
-{
-  "success": true,
-  "data": {
-    "requests": [
-      {
-        "id": "req_125",
-        "sender": {
-          "id": "user_456",
-          "name": "Jane Smith",
-          "age": 26,
-          "location": "Pune, India",
-          "occupation": "Doctor",
-          "bio": "Passionate about helping others and finding true love",
-          "religion": "Hindu",
-          "caste": "Kayasth",
-          "height": "5'4\"",
-          "education": "MBBS",
-          "income": "₹6,00,000 - ₹8,00,000",
-          "profileImage": "https://example.com/images/user_456.jpg"
-        },
-        "message": "Hi, I found your profile interesting. Would like to connect.",
-        "timestamp": "2024-01-15T10:30:00Z",
-        "status": "pending"
-      },
-      {
-        "id": "req_126",
-        "sender": {
-          "id": "user_789",
-          "name": "Priya Patel",
-          "age": 27,
-          "location": "Ahmedabad, India",
-          "occupation": "Teacher",
-          "bio": "Love teaching and exploring new cultures",
-          "religion": "Hindu",
-          "caste": "Patel",
-          "height": "5'6\"",
-          "education": "Master's in Education",
-          "income": "₹5,00,000 - ₹7,00,000",
-          "profileImage": "https://example.com/images/user_789.jpg"
-        },
-        "message": "Hello! Your profile caught my attention. Let's chat!",
-        "timestamp": "2024-01-14T16:45:00Z",
-        "status": "pending"
-      }
-    ],
-    "totalCount": 2,
-    "hasMore": false
-  }
-}
-```
+### For Matches Screen
+| Field | Purpose | Priority |
+|-------|---------|----------|
+| `lastMessage` | Preview of last message | High |
+| `unreadCount` | Number of unread messages | High |
+| `matchedAt` | When they matched | Medium |
+| `isOnline` | Online status | High |
+| `lastSeen` | Last active timestamp | Medium |
 
-#### 6.4 Accept Connection Request
+### For Messages Screen
+| Field | Purpose | Priority |
+|-------|---------|----------|
+| `typingStatus` | Is user typing | High |
+| `lastSeen` | Last seen timestamp | High |
+| `messageStatus` | Sent/Delivered/Read | High |
+| `isOnline` | Online status | High |
 
-**Endpoint:** `POST /api/requests/{requestId}/accept`  
-**Description:** Accept a received connection request
+### For Profile Screen (Self)
+| Field | Purpose | Priority |
+|-------|---------|----------|
+| `profileViews` | Who viewed profile | High |
+| `interestReceived` | Interests received count | High |
+| `premiumStatus` | Membership status | High |
+| `profileCompletePercentage` | Completion status | High |
+| `memberSince` | Account creation date | Medium |
+| `shortlistedBy` | Who shortlisted user | Medium |
 
-**Headers:**
+### For Received Requests Screen
+| Field | Purpose | Priority |
+|-------|---------|----------|
+| `fullProfile` | Complete profile data | High |
+| `compatibilityScore` | Match percentage | High |
+| `familyDetails` | Family information summary | High |
+| `lifestyleDetails` | Diet, hobbies, interests | Medium |
 
-```
-Authorization: Bearer <access_token>
-```
+### For Settings Screen
+| Field | Purpose | Priority |
+|-------|---------|----------|
+| `deleteAccount` | Account deletion | High |
+| `privacySettings` | Detailed privacy options | High |
+| `notificationPreferences` | Granular notification settings | High |
+| `blockedUsers` | List of blocked users | Medium |
+| `hiddenProfiles` | Hidden profiles list | Medium |
 
-**Response:**
+### For Master Data
+| Field | Purpose | Priority |
+|-------|---------|----------|
+| `cities` | List of cities by state | High |
+| `states` | List of Indian states | High |
+| `countries` | Country list | High |
+| `nakshatras` | Nakshatra list | Medium |
+| `rashis` | Rashi/Moon sign list | Medium |
+| `gotras` | Gotra list | Medium |
 
-```json
-{
-  "success": true,
-  "message": "Connection request accepted successfully",
-  "data": {
-    "requestId": "req_125",
-    "senderId": "user_456",
-    "recipientId": "user_123",
-    "status": "accepted",
-    "acceptedAt": "2024-01-15T11:00:00Z",
-    "conversationId": "conv_123"
-  }
-}
-```
+---
 
-#### 6.5 Decline Connection Request
+## Pages Using Mock/Dummy Data
 
-**Endpoint:** `POST /api/requests/{requestId}/decline`  
-**Description:** Decline a received connection request
+### 1. app/(tabs)/matches.tsx
+- **API Used:** GET /matches (Not implemented)
+- **Currently Using:** Mock data array
+- **Needs:** Real API integration
 
-**Headers:**
+### 2. app/received-requests.tsx
+- **API Used:** GET /requests/received (Not integrated)
+- **Currently Using:** Local mock data array
+- **Needs:** Real API integration with pagination
 
-```
-Authorization: Bearer <access_token>
-```
+### 3. app/profile/[id].tsx
+- **API Used:** GET /users/profile/:userId (Hardcoded data)
+- **Currently Using:** Static test data
+- **Needs:** Real API call to fetch profile
 
-**Response:**
+---
 
-```json
-{
-  "success": true,
-  "message": "Connection request declined successfully",
-  "data": {
-    "requestId": "req_125",
-    "senderId": "user_456",
-    "recipientId": "user_123",
-    "status": "declined",
-    "declinedAt": "2024-01-15T11:00:00Z"
-  }
-}
-```
+## API Endpoints Summary
 
-## Summary
+| Method | Endpoint | Used In | Status |
+|--------|----------|---------|--------|
+| POST | /auth/register | register.tsx | ✅ Implemented |
+| POST | /auth/login | login.tsx | ✅ Implemented |
+| POST | /auth/logout | profile.tsx, settings.tsx | ✅ Implemented |
+| POST | /auth/forgot-password | forgot-password.tsx | ✅ Implemented |
+| POST | /auth/reset-password | forgot-password.tsx | ✅ Implemented |
+| POST | /auth/refresh | api.ts (internal) | ✅ Implemented |
+| GET | /users/me/profile | profile.tsx, _layout.tsx | ✅ Implemented |
+| PUT | /users/me/profile | profile.tsx | ✅ Implemented |
+| GET | /users/profile/:userId | profile/[id].tsx | ⚠️ Mock Data |
+| GET | /users/me/same-city | my-city.tsx | ✅ Implemented |
+| GET | /users/settings | settings.tsx | ⚠️ Local State |
+| PUT | /users/settings | settings.tsx | ⚠️ Local State |
+| GET | /matches/potential | home.tsx | ✅ Implemented |
+| GET | /matches | matches.tsx | ❌ Mock Data |
+| POST | /matches/:userId/like | home.tsx | ✅ Implemented |
+| POST | /matches/:userId/dislike | home.tsx | ✅ Implemented |
+| GET | /messages/conversations | messages.tsx | ✅ Implemented |
+| GET | /messages/conversations/:id | chat/[id].tsx | ✅ Implemented |
+| POST | /messages/conversations/:id | chat/[id].tsx | ✅ Implemented |
+| POST | /requests/send/:userId | profile/[id].tsx | ⚠️ Alert Only |
+| GET | /requests/sent | sent-requests.tsx | ✅ Implemented |
+| GET | /requests/received | received-requests.tsx | ❌ Mock Data |
+| POST | /requests/:id/accept | received-requests.tsx | ⚠️ Alert Only |
+| POST | /requests/:id/decline | received-requests.tsx | ⚠️ Alert Only |
+| GET | /master/religions | UserForm.tsx | ⚠️ Static Data |
+| GET | /master/castes | UserForm.tsx | ⚠️ Static Data |
+| GET | /master/education | UserForm.tsx | ⚠️ Static Data |
+| GET | /master/occupations | UserForm.tsx | ⚠️ Static Data |
+| GET | /master/income-ranges | UserForm.tsx | ⚠️ Static Data |
 
-- **Total APIs Required:** 19
-- **Authentication:** 4 APIs
-- **User Profiles:** 3 APIs
-- **Matching:** 4 APIs
-- **Messaging:** 3 APIs
-- **Settings:** 2 APIs
-- **Connection Requests:** 3 APIs
+---
 
-All APIs follow RESTful conventions and include proper authentication via JWT tokens. Error responses follow a consistent format with appropriate HTTP status codes.
+## Recommendations
+
+1. **Implement Pagination** - Add pagination support to all list endpoints
+2. **Real-time Updates** - Implement WebSocket for messaging and notifications
+3. **Image Upload** - Add API for profile image upload
+4. **Search** - Add advanced search API with multiple filters
+5. **Notifications** - Add push notification support
+6. **Analytics** - Add API for user activity tracking
+7. **Privacy Controls** - Add more granular privacy settings
+8. **Premium Features** - Add API for premium membership features
+
+---
+
+*Last Updated: 2024*
+*Document Version: 1.0*
