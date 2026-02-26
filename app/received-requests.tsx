@@ -52,7 +52,7 @@ export default function ReceivedRequestsScreen() {
       caste: "Brahmin",
       height: "5'10\"",
       education: "Bachelor's in Engineering",
-      income: "1200000-1500000",
+      income: "₹12,00,000 - ₹15,00,000",
     },
     {
       id: "2",
@@ -69,7 +69,7 @@ export default function ReceivedRequestsScreen() {
       caste: "Jat",
       height: "5'11\"",
       education: "MBBS, MD",
-      income: "1500000-2000000",
+      income: "₹15,00,000 - ₹20,00,000",
     },
     {
       id: "3",
@@ -87,7 +87,7 @@ export default function ReceivedRequestsScreen() {
       caste: "Patel",
       height: "6'0\"",
       education: "MBA",
-      income: "2500000+",
+      income: "₹25,00,000+",
     },
   ]);
 
@@ -130,8 +130,22 @@ export default function ReceivedRequestsScreen() {
         <Text style={styles.cardName}>
           {item.senderName}, {item.senderAge}
         </Text>
-        <Text style={styles.cardLocation}>{item.senderLocation}</Text>
-        <Text style={styles.cardOccupation}>{item.senderOccupation}</Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>📍</Text>
+          <Text style={styles.cardLocation}>{item.senderLocation}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>💼</Text>
+          <Text style={styles.cardOccupation}>{item.senderOccupation}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>🪔</Text>
+          <Text style={styles.cardInfo}>{item.religion} • {item.caste}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>🎓</Text>
+          <Text style={styles.cardInfo}>{item.education}</Text>
+        </View>
         <Text style={styles.cardBio}>{item.bio}</Text>
       </View>
       <View style={styles.cardActions}>
@@ -139,13 +153,13 @@ export default function ReceivedRequestsScreen() {
           style={[styles.actionButton, styles.declineButton]}
           onPress={() => handleDeclineRequest(item.id)}
         >
-          <Text style={styles.actionButtonText}>X</Text>
+          <Text style={styles.actionButtonText}>✕</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.acceptButton]}
           onPress={() => handleAcceptRequest(item.id)}
         >
-          <Text style={styles.actionButtonText}>Y</Text>
+          <Text style={styles.actionButtonText}>♥</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -171,7 +185,7 @@ export default function ReceivedRequestsScreen() {
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <Text style={styles.backButtonText}>{'←'}</Text>
+            <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <ThemedText style={styles.headerTitle}>Received Requests</ThemedText>
@@ -219,8 +233,8 @@ export default function ReceivedRequestsScreen() {
               title: "ACCEPT",
               style: {
                 label: {
-                  backgroundColor: "#28a745",
-                  borderColor: "#28a745",
+                  backgroundColor: "#E91E63",
+                  borderColor: "#E91E63",
                   color: "#fff",
                   borderWidth: 1,
                   fontSize: 24,
@@ -274,7 +288,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 24,
-    color: "#FF6B6B",
+    color: "#E91E63",
     fontWeight: "bold",
   },
   headerTitleContainer: {
@@ -284,7 +298,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#FF6B6B",
+    color: "#E91E63",
   },
   placeholder: {
     width: 40,
@@ -300,14 +314,14 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: "#E8E8E8",
+    borderColor: "#E91E63",
     justifyContent: "center",
     backgroundColor: "#fff",
     margin: 1,
   },
   cardImage: {
     width: "100%",
-    height: height * 0.5,
+    height: height * 0.45,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
   },
@@ -319,26 +333,37 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     color: "#333",
-    marginBottom: 8,
+    marginBottom: 10,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  infoIcon: {
+    fontSize: 14,
+    marginRight: 8,
   },
   cardLocation: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#666",
     marginBottom: 4,
   },
   cardOccupation: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#666",
-    marginBottom: 12,
+    marginBottom: 4,
+  },
+  cardInfo: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 4,
   },
   cardBio: {
     fontSize: 14,
     color: "#555",
     lineHeight: 20,
-    marginBottom: 15,
-  },
-  cardInfo: {
-    marginBottom: 15,
+    marginTop: 8,
   },
   cardInfoText: {
     fontSize: 12,
@@ -349,24 +374,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     padding: 20,
-    paddingTop: 0,
+    paddingTop: 10,
   },
   actionButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
   },
   acceptButton: {
-    backgroundColor: "#28a745",
+    backgroundColor: "#E91E63",
   },
   declineButton: {
-    backgroundColor: "#dc3545",
+    backgroundColor: "#9e9e9e",
   },
   actionButtonText: {
     color: "#fff",
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
   },
 });

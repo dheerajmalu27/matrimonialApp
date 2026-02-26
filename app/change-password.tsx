@@ -58,35 +58,61 @@ export default function ChangePasswordScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <ThemedView style={styles.content}>
-          <ThemedText style={styles.title}>Change Password</ThemedText>
-          <ThemedText style={styles.subtitle}>
-            Enter your current password and choose a new one
-          </ThemedText>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => router.back()}
+            >
+              <Text style={styles.backButtonText}>←</Text>
+            </TouchableOpacity>
+            <View style={styles.headerContent}>
+              <View style={styles.iconContainer}>
+                <Text style={styles.headerIcon}>🔐</Text>
+              </View>
+              <ThemedText style={styles.title}>Change Password</ThemedText>
+              <ThemedText style={styles.subtitle}>
+                Enter your current password and choose a new one
+              </ThemedText>
+            </View>
+          </View>
 
           <View style={styles.form}>
-            <TextInput
-              style={styles.input}
-              placeholder="Current Password"
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Current Password</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter current password"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry
+                placeholderTextColor="#999"
+              />
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="New Password"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>New Password</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter new password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+                placeholderTextColor="#999"
+              />
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm New Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Confirm New Password</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Re-enter new password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+                placeholderTextColor="#999"
+              />
+            </View>
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
@@ -97,6 +123,13 @@ export default function ChangePasswordScreen() {
                 {loading ? "Changing..." : "Change Password"}
               </Text>
             </TouchableOpacity>
+
+            {/* Password Requirements */}
+            <View style={styles.requirements}>
+              <Text style={styles.requirementsTitle}>Password Requirements:</Text>
+              <Text style={styles.requirementText}>• At least 6 characters long</Text>
+              <Text style={styles.requirementText}>• Use a mix of letters and numbers</Text>
+            </View>
           </View>
         </ThemedView>
       </ScrollView>
@@ -107,54 +140,137 @@ export default function ChangePasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#fce4ec",
   },
   scrollContent: {
     flexGrow: 1,
   },
   content: {
     flex: 1,
-    justifyContent: "center",
     paddingHorizontal: 20,
   },
-  title: {
+  header: {
+    marginBottom: 30,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  backButtonText: {
+    fontSize: 22,
+    color: "#E91E63",
+    fontWeight: "bold",
+  },
+  headerContent: {
+    alignItems: "center",
+  },
+  iconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "#E91E63",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 15,
+    shadowColor: "#E91E63",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  headerIcon: {
     fontSize: 32,
+  },
+  title: {
+    fontSize: 28,
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 8,
-    color: "#FF6B6B",
+    color: "#E91E63",
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     textAlign: "center",
-    marginBottom: 40,
+    marginBottom: 20,
     color: "#666",
+    paddingHorizontal: 20,
   },
   form: {
-    marginBottom: 30,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 25,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  inputGroup: {
+    marginBottom: 18,
+  },
+  label: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
+    borderColor: "#e0e0e0",
+    borderRadius: 12,
     padding: 15,
-    marginBottom: 15,
     fontSize: 16,
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "#fafafa",
+    color: "#333",
   },
   button: {
-    backgroundColor: "#FF6B6B",
-    borderRadius: 8,
-    padding: 15,
+    backgroundColor: "#E91E63",
+    borderRadius: 12,
+    padding: 16,
     alignItems: "center",
-    marginTop: 10,
+    marginTop: 15,
+    shadowColor: "#E91E63",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   buttonDisabled: {
     opacity: 0.6,
+    shadowColor: "transparent",
   },
   buttonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
+  },
+  requirements: {
+    marginTop: 25,
+    padding: 15,
+    backgroundColor: "#fce4ec",
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: "#E91E63",
+  },
+  requirementsTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#333",
+    marginBottom: 8,
+  },
+  requirementText: {
+    fontSize: 13,
+    color: "#555",
+    marginBottom: 4,
   },
 });

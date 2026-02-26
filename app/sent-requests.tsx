@@ -104,17 +104,33 @@ export default function SentRequestsScreen() {
     <View style={styles.requestCard}>
       <View style={styles.requestHeader}>
         <View style={styles.recipientInfo}>
-          <Text style={styles.recipientName}>
-            {item.recipientName}, {item.recipientAge}
-          </Text>
-          <Text style={styles.recipientDetails}>
-            {item.recipientLocation} • {item.recipientOccupation}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.recipientName}>
+              {item.recipientName}
+            </Text>
+            <Text style={styles.recipientAge}>{item.recipientAge}</Text>
+          </View>
+          <View style={styles.detailsRow}>
+            <Text style={styles.detailIcon}>📍</Text>
+            <Text style={styles.recipientDetails}>
+              {item.recipientLocation}
+            </Text>
+          </View>
+          <View style={styles.detailsRow}>
+            <Text style={styles.detailIcon}>💼</Text>
+            <Text style={styles.recipientDetails}>
+              {item.recipientOccupation}
+            </Text>
+          </View>
         </View>
-        <Text style={styles.timestamp}>{item.timestamp}</Text>
+        <View style={styles.timestampContainer}>
+          <Text style={styles.timestamp}>{item.timestamp}</Text>
+        </View>
       </View>
 
-      <Text style={styles.requestMessage}>{item.message}</Text>
+      <View style={styles.messageContainer}>
+        <Text style={styles.requestMessage}>{item.message}</Text>
+      </View>
 
       {item.status === "pending" && (
         <View style={styles.actionButtons}>
@@ -129,7 +145,9 @@ export default function SentRequestsScreen() {
 
       {item.status === "accepted" && (
         <View style={styles.statusContainer}>
-          <Text style={styles.acceptedText}>✓ Request Accepted</Text>
+          <View style={styles.statusBadge}>
+            <Text style={styles.acceptedText}>✓ Accepted</Text>
+          </View>
           <TouchableOpacity
             style={styles.messageButton}
             onPress={() => router.push("/chat/[id]")}
@@ -141,7 +159,9 @@ export default function SentRequestsScreen() {
 
       {item.status === "declined" && (
         <View style={styles.statusContainer}>
-          <Text style={styles.declinedText}>✗ Request Declined</Text>
+          <View style={[styles.statusBadge, styles.declinedBadge]}>
+            <Text style={styles.declinedText}>✕ Declined</Text>
+          </View>
         </View>
       )}
     </View>
@@ -189,8 +209,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 15,
     backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e9ecef",
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -209,7 +229,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 24,
-    color: "#FF6B6B",
+    color: "#E91E63",
     fontWeight: "bold",
   },
   headerTitleContainer: {
@@ -219,7 +239,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#FF6B6B",
+    color: "#E91E63",
   },
   placeholder: {
     width: 40,
@@ -230,11 +250,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   listContainer: {
-    padding: 20,
+    padding: 15,
   },
   requestCard: {
     backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 15,
     marginBottom: 15,
     shadowColor: "#000",
@@ -242,35 +262,72 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: "#E91E63",
   },
   requestHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   recipientInfo: {
     flex: 1,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
   },
   recipientName: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#333",
+  },
+  recipientAge: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#E91E63",
+    marginLeft: 8,
+    backgroundColor: "#fce4ec",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  detailsRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 4,
+  },
+  detailIcon: {
+    fontSize: 12,
+    marginRight: 6,
   },
   recipientDetails: {
     fontSize: 14,
     color: "#666",
   },
+  timestampContainer: {
+    backgroundColor: "#fce4ec",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
   timestamp: {
     fontSize: 12,
-    color: "#999",
+    color: "#E91E63",
+    fontWeight: "600",
+  },
+  messageContainer: {
+    backgroundColor: "#f9f9f9",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 12,
   },
   requestMessage: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#555",
     lineHeight: 22,
-    marginBottom: 15,
   },
   actionButtons: {
     flexDirection: "row",
@@ -279,12 +336,11 @@ const styles = StyleSheet.create({
   actionButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: "center",
-    marginHorizontal: 5,
   },
   cancelButton: {
-    backgroundColor: "#dc3545",
+    backgroundColor: "#9e9e9e",
   },
   cancelButtonText: {
     color: "#fff",
@@ -293,23 +349,37 @@ const styles = StyleSheet.create({
   },
   statusContainer: {
     alignItems: "center",
+    gap: 10,
+  },
+  statusBadge: {
+    backgroundColor: "#e8f5e9",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  declinedBadge: {
+    backgroundColor: "#ffebee",
   },
   acceptedText: {
-    fontSize: 16,
-    color: "#28a745",
+    fontSize: 14,
+    color: "#4caf50",
     fontWeight: "bold",
-    marginBottom: 10,
   },
   declinedText: {
-    fontSize: 16,
-    color: "#dc3545",
+    fontSize: 14,
+    color: "#e53935",
     fontWeight: "bold",
   },
   messageButton: {
-    backgroundColor: "#FF6B6B",
+    backgroundColor: "#E91E63",
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: "#E91E63",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   messageButtonText: {
     color: "#fff",

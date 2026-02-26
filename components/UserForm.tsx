@@ -17,6 +17,7 @@ import {
   FlatList,
   Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -563,6 +564,7 @@ export function UserForm({
   isRegistration = false,
   onSignIn,
 }: UserFormProps) {
+  const insets = useSafeAreaInsets();
   const [formData, setFormData] = useState<UserFormData>({
     name: initialData.name || "",
     age: initialData.age || "",
@@ -1032,7 +1034,7 @@ export function UserForm({
 
   const renderNavigationButtons = () => {
     return (
-      <View style={styles.buttonContainer}>
+      <View style={[styles.buttonContainer, { paddingBottom: insets.bottom + 10 }]}>
         {currentStep > 0 ? (
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <Text style={styles.backButtonText}>← Back</Text>
@@ -1055,8 +1057,8 @@ export function UserForm({
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
       {renderStepIndicators()}
       <ScrollView
         ref={scrollViewRef}
@@ -1081,7 +1083,10 @@ export function UserForm({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8f9fa" },
+  container: { 
+    flex: 1, 
+    backgroundColor: "#f5f5f5" 
+  },
   scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 20 },
   sliderContainer: { flexDirection: "row" },
@@ -1094,51 +1099,58 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#e9ecef",
+    borderBottomColor: "#f0f0f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   stepIndicatorItem: { alignItems: "center" },
   stepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#e9ecef",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#e8e8e8",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 4,
+    borderWidth: 2,
+    borderColor: "transparent",
   },
-  stepCircleActive: { backgroundColor: "#FF6B6B" },
-  stepCircleCurrent: { backgroundColor: "#FF6B6B", borderWidth: 3, borderColor: "#ffcccc" },
-  stepNumber: { fontSize: 12, fontWeight: "bold", color: "#999" },
+  stepCircleActive: { backgroundColor: "#E91E63", borderColor: "#E91E63" },
+  stepCircleCurrent: { backgroundColor: "#E91E63", borderColor: "#f8bbd0", borderWidth: 3 },
+  stepNumber: { fontSize: 12, fontWeight: "bold", color: "#888" },
   stepNumberActive: { color: "#fff" },
-  stepTitleText: { fontSize: 10, color: "#999" },
-  stepTitleActive: { color: "#FF6B6B", fontWeight: "600" },
-  stepTitle: { fontSize: 22, fontWeight: "bold", color: "#333", marginBottom: 5, textAlign: "center" },
-  stepSubtitle: { fontSize: 14, color: "#666", marginBottom: 20, textAlign: "center" },
-  inputGroup: { marginBottom: 18 },
+  stepTitleText: { fontSize: 10, color: "#888" },
+  stepTitleActive: { color: "#E91E63", fontWeight: "700" },
+  stepTitle: { fontSize: 24, fontWeight: "bold", color: "#E91E63", marginBottom: 8, textAlign: "center" },
+  stepSubtitle: { fontSize: 14, color: "#666", marginBottom: 25, textAlign: "center" },
+  inputGroup: { marginBottom: 20 },
   labelRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
   label: { fontSize: 15, fontWeight: "600", color: "#333" },
-  requiredStar: { color: "#FF6B6B", fontSize: 16, fontWeight: "bold", marginLeft: 4 },
+  requiredStar: { color: "#E91E63", fontSize: 16, fontWeight: "bold", marginLeft: 4 },
   input: {
     borderWidth: 1,
     borderColor: "#ddd",
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 14,
     fontSize: 16,
     backgroundColor: "#fff",
     color: "#333",
   },
   multilineInput: { height: 100, textAlignVertical: "top" },
-  inputError: { borderColor: "#FF6B6B", borderWidth: 2 },
+  inputError: { borderColor: "#E91E63", borderWidth: 2 },
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 6,
-    backgroundColor: "#fff5f5",
+    backgroundColor: "#fce4ec",
     padding: 8,
     borderRadius: 6,
   },
   errorIcon: { fontSize: 14, marginRight: 6 },
-  errorText: { color: "#dc3545", fontSize: 13, flex: 1 },
+  errorText: { color: "#c62828", fontSize: 13, flex: 1 },
   
   // Dropdown styles
   dropdown: {
@@ -1147,13 +1159,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderWidth: 1,
     borderColor: "#ddd",
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 14,
     backgroundColor: "#fff",
   },
   dropdownText: { fontSize: 16, color: "#333", flex: 1 },
   dropdownPlaceholder: { color: "#999" },
-  dropdownArrow: { fontSize: 12, color: "#666", marginLeft: 10 },
+  dropdownArrow: { fontSize: 12, color: "#E91E63", marginLeft: 10 },
   
   // Modal styles
   modalOverlay: {
@@ -1163,10 +1175,10 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: screenHeight * 0.7,
-    paddingBottom: 20,
+    paddingBottom: 30,
   },
   modalHeader: {
     flexDirection: "row",
@@ -1174,37 +1186,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#e9ecef",
-  },
-  modalTitle: { fontSize: 18, fontWeight: "bold", color: "#333" },
-  modalClose: { fontSize: 20, color: "#666", padding: 5 },
-  dropdownItem: {
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
-  dropdownItemSelected: { backgroundColor: "#fff5f5" },
+  modalTitle: { fontSize: 18, fontWeight: "bold", color: "#E91E63" },
+  modalClose: { fontSize: 20, color: "#666", padding: 5 },
+  dropdownItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f5",
+  },
+  dropdownItemSelected: { backgroundColor: "#fce4ec" },
   dropdownItemText: { fontSize: 16, color: "#333" },
-  dropdownItemTextSelected: { color: "#FF6B6B", fontWeight: "600" },
-  dropdownCheck: { fontSize: 16, color: "#FF6B6B", fontWeight: "bold" },
+  dropdownItemTextSelected: { color: "#E91E63", fontWeight: "700" },
+  dropdownCheck: { fontSize: 16, color: "#E91E63", fontWeight: "bold" },
 
   // Multi-select styles
   multiSelectInfo: {
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#e9ecef",
+    borderBottomColor: "#f0f0f0",
+    backgroundColor: "#fce4ec",
   },
-  multiSelectCount: { fontSize: 14, color: "#666" },
+  multiSelectCount: { fontSize: 14, color: "#E91E63", fontWeight: "600" },
   checkboxContainer: {
     flexDirection: "row",
     alignItems: "center",
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 6,
     borderWidth: 2,
     borderColor: "#ddd",
     marginRight: 12,
@@ -1212,31 +1225,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   checkboxSelected: {
-    backgroundColor: "#FF6B6B",
-    borderColor: "#FF6B6B",
+    backgroundColor: "#E91E63",
+    borderColor: "#E91E63",
   },
   checkmark: { color: "#fff", fontSize: 14, fontWeight: "bold" },
   selectedTagsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 8,
+    marginTop: 10,
   },
   selectedTag: {
-    backgroundColor: "#FF6B6B",
-    borderRadius: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    backgroundColor: "#E91E63",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     marginRight: 8,
     marginBottom: 8,
   },
-  selectedTagText: { color: "#fff", fontSize: 12 },
+  selectedTagText: { color: "#fff", fontSize: 12, fontWeight: "600" },
   doneButton: {
-    backgroundColor: "#FF6B6B",
+    backgroundColor: "#E91E63",
     marginHorizontal: 20,
-    marginTop: 10,
-    padding: 15,
-    borderRadius: 10,
+    marginTop: 15,
+    padding: 16,
+    borderRadius: 12,
     alignItems: "center",
+    shadowColor: "#E91E63",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
   },
   doneButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
 
@@ -1252,8 +1270,8 @@ const styles = StyleSheet.create({
   },
   datePickerLabel: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
+    fontWeight: "700",
+    color: "#E91E63",
     textAlign: "center",
     marginBottom: 10,
   },
@@ -1266,7 +1284,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   datePickerItemSelected: {
-    backgroundColor: "#FF6B6B",
+    backgroundColor: "#E91E63",
     borderRadius: 8,
   },
   datePickerText: { fontSize: 14, color: "#333" },
@@ -1275,53 +1293,64 @@ const styles = StyleSheet.create({
   // Image styles
   imageContainer: { flexDirection: "row", flexWrap: "wrap", marginTop: 10 },
   imageWrapper: { position: "relative", marginRight: 10, marginBottom: 10 },
-  imagePreview: { width: 80, height: 80, borderRadius: 10 },
+  imagePreview: { width: 80, height: 80, borderRadius: 12, borderWidth: 2, borderColor: "#E91E63" },
   removeImageButton: {
     position: "absolute",
     top: -8,
     right: -8,
-    backgroundColor: "#FF6B6B",
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    backgroundColor: "#E91E63",
+    borderRadius: 14,
+    width: 26,
+    height: 26,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
   },
-  removeImageText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  removeImageText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
   addImageButton: {
     width: 80,
     height: 80,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: "#ddd",
+    borderColor: "#E91E63",
     borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "#fce4ec",
   },
-  addImageText: { fontSize: 24, color: "#666" },
-  addImageLabel: { fontSize: 10, color: "#666", marginTop: 2 },
-  imageHint: { fontSize: 12, color: "#FF6B6B", marginTop: 8, fontStyle: "italic" },
+  addImageText: { fontSize: 28, color: "#E91E63" },
+  addImageLabel: { fontSize: 10, color: "#E91E63", marginTop: 2, fontWeight: "600" },
+  imageHint: { fontSize: 12, color: "#E91E63", marginTop: 10, fontStyle: "italic", fontWeight: "500" },
 
   // Button styles
   buttonContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     padding: 15,
+    paddingTop: 15,
     backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: "#e9ecef",
+    borderTopColor: "#f0f0f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
   },
   placeholderButton: { width: 80 },
-  backButton: { backgroundColor: "#6c757d", paddingVertical: 14, paddingHorizontal: 20, borderRadius: 10 },
+  backButton: { backgroundColor: "#9e9e9e", paddingVertical: 15, paddingHorizontal: 22, borderRadius: 12 },
   backButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  nextButton: { backgroundColor: "#FF6B6B", paddingVertical: 14, paddingHorizontal: 30, borderRadius: 10 },
+  nextButton: { backgroundColor: "#E91E63", paddingVertical: 15, paddingHorizontal: 35, borderRadius: 12, shadowColor: "#E91E63", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
   nextButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  submitButton: { backgroundColor: "#28a745", paddingVertical: 14, paddingHorizontal: 30, borderRadius: 10 },
+  submitButton: { backgroundColor: "#4CAF50", paddingVertical: 15, paddingHorizontal: 35, borderRadius: 12, shadowColor: "#4CAF50", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
   submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  signInButton: { alignSelf: "center", marginBottom: 20 },
-  signInButtonText: { color: "#FF6B6B", fontSize: 15, fontWeight: "600", textDecorationLine: "underline" },
-  passwordHint: { backgroundColor: "#f0f8ff", padding: 15, borderRadius: 10, marginTop: 10 },
-  passwordHintTitle: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 8 },
-  passwordHintText: { fontSize: 12, color: "#666", marginBottom: 4 },
+  signInButton: { alignSelf: "center", marginBottom: 25, paddingVertical: 10, paddingHorizontal: 20 },
+  signInButtonText: { color: "#E91E63", fontSize: 15, fontWeight: "700", textDecorationLine: "underline" },
+  passwordHint: { backgroundColor: "#e8f5e9", padding: 15, borderRadius: 12, marginTop: 15, borderLeftWidth: 4, borderLeftColor: "#E91E63" },
+  passwordHintTitle: { fontSize: 14, fontWeight: "700", color: "#333", marginBottom: 10 },
+  passwordHintText: { fontSize: 12, color: "#555", marginBottom: 5 },
 });

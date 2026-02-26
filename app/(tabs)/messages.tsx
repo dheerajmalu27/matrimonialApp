@@ -65,34 +65,58 @@ export default function MessagesScreen() {
 
   const renderConversation = ({ item }: { item: Conversation }) => (
     <Link href={`/chat/${item.id}` as any} asChild>
-      <TouchableOpacity style={styles.conversationItem} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.conversationItem} activeOpacity={0.8}>
         <View style={styles.avatarContainer}>
           <Image source={{ uri: item.image }} style={styles.avatar} />
-          {item.isOnline && <View style={styles.onlineIndicator} />}
+          {item.isOnline && (
+            <View style={styles.onlineIndicator}>
+              <View style={styles.onlineDot} />
+            </View>
+          )}
         </View>
 
         <View style={styles.conversationContent}>
           <View style={styles.conversationHeader}>
-            <ThemedText style={styles.name}>{item.name}</ThemedText>
+            <View style={styles.nameRow}>
+              <ThemedText style={styles.name}>{item.name}</ThemedText>
+              {item.unreadCount > 0 && (
+                <View style={styles.unreadDot} />
+              )}
+            </View>
             <ThemedText style={styles.timestamp}>{item.timestamp}</ThemedText>
           </View>
 
-          <ThemedText style={styles.lastMessage} numberOfLines={1}>
-            {item.lastMessage}
-          </ThemedText>
-        </View>
-
-        {item.unreadCount > 0 && (
-          <View style={styles.unreadBadge}>
-            <Text style={styles.unreadText}>{item.unreadCount}</Text>
+          <View style={styles.messageRow}>
+            <ThemedText 
+              style={[
+                styles.lastMessage, 
+                item.unreadCount > 0 && styles.unreadMessage
+              ]} 
+              numberOfLines={1}
+            >
+              {item.lastMessage}
+            </ThemedText>
+            {item.unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{item.unreadCount}</Text>
+              </View>
+            )}
           </View>
-        )}
+        </View>
       </TouchableOpacity>
     </Link>
   );
 
   return (
     <ThemedView style={styles.container}>
+      {/* Header */}
+      {/* <View style={styles.header}>
+        <Text style={styles.headerTitle}>Messages</Text>
+        <Text style={styles.headerSubtitle}>
+          {conversations.length} {conversations.length === 1 ? 'conversation' : 'conversations'}
+        </Text>
+      </View> */}
+
       <FlatList
         data={conversations}
         renderItem={renderConversation}
@@ -101,8 +125,12 @@ export default function MessagesScreen() {
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>💬</Text>
+            <ThemedText style={styles.emptyTitle}>
+              No conversations yet
+            </ThemedText>
             <ThemedText style={styles.emptyText}>
-              No conversations yet. Start chatting with potential matches!
+              Start chatting with potential matches!
             </ThemedText>
           </View>
         }
@@ -114,47 +142,76 @@ export default function MessagesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: "#f5f5f5",
   },
-  listContainer: {
-    padding: 15,
-  },
-  conversationItem: {
+  header: {
     backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 4,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#E91E63",
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: "#666",
+  },
+  listContainer: {
+    padding: 15,
+    paddingBottom: 30,
+  },
+  conversationItem: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: "#e9ecef",
+    borderColor: "#f0f0f0",
   },
   avatarContainer: {
     position: "relative",
-    marginRight: 12,
+    marginRight: 14,
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: "#FF6B6B",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 3,
+    borderColor: "#E91E63",
   },
   onlineIndicator: {
     position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: "#28a745",
-    borderWidth: 2,
-    borderColor: "#fff",
+    bottom: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  onlineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#4CAF50",
   },
   conversationContent: {
     flex: 1,
@@ -163,29 +220,51 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   name: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "bold",
-    color: "#333",
+    color: "#222",
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#E91E63",
+    marginLeft: 8,
   },
   timestamp: {
     fontSize: 12,
-    color: "#666",
+    color: "#888",
+  },
+  messageRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   lastMessage: {
     fontSize: 14,
     color: "#666",
+    flex: 1,
+    marginRight: 10,
+  },
+  unreadMessage: {
+    fontWeight: "600",
+    color: "#333",
   },
   unreadBadge: {
-    backgroundColor: "#FF6B6B",
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    backgroundColor: "#E91E63",
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
   },
   unreadText: {
     color: "#fff",
@@ -196,11 +275,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 50,
+    paddingVertical: 80,
+  },
+  emptyIcon: {
+    fontSize: 70,
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 8,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#666",
     textAlign: "center",
+    paddingHorizontal: 40,
   },
 });

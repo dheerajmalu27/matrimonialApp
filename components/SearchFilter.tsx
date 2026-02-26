@@ -115,6 +115,7 @@ export default function SearchFilter({
       <TextInput
         style={styles.input}
         placeholder={placeholder}
+        placeholderTextColor="#999"
         value={filters[key]}
         onChangeText={(value) => updateFilter(key, value)}
         keyboardType={keyboardType}
@@ -127,10 +128,11 @@ export default function SearchFilter({
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputContainer}>
-          <IconSymbol name="magnifyingglass" size={20} color="#999" style={styles.searchIcon} />
+          <IconSymbol name="magnifyingglass" size={20} color="#E91E63" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by name, location, or occupation..."
+            placeholderTextColor="#999"
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearch}
@@ -141,7 +143,9 @@ export default function SearchFilter({
           style={styles.filterIconButton}
           onPress={() => setShowFilters(true)}
         >
-          <IconSymbol name="line.3.horizontal.decrease.circle" size={24} color="#FF6B6B" />
+          <View style={styles.filterBadge}>
+            <IconSymbol name="line.3.horizontal.decrease.circle" size={24} color="#fff" />
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -160,7 +164,10 @@ export default function SearchFilter({
             >
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
-            <ThemedText style={styles.modalTitle}>Filters</ThemedText>
+            <View style={styles.titleContainer}>
+              <Text style={styles.filterIcon}>🔍</Text>
+              <ThemedText style={styles.modalTitle}>Filters</ThemedText>
+            </View>
             <TouchableOpacity
               style={styles.clearButton}
               onPress={handleClearFilters}
@@ -174,7 +181,7 @@ export default function SearchFilter({
             showsVerticalScrollIndicator={false}
           >
             <ThemedText style={styles.sectionTitle}>
-              Basic Information
+              👤 Basic Information
             </ThemedText>
 
             <View style={styles.row}>
@@ -185,7 +192,7 @@ export default function SearchFilter({
             {renderFilterInput("Location", "location", "City or State")}
 
             <ThemedText style={styles.sectionTitle}>
-              Personal Details
+              🪔 Personal Details
             </ThemedText>
 
             {renderFilterInput("Religion", "religion", "e.g., Hindu, Muslim")}
@@ -201,7 +208,7 @@ export default function SearchFilter({
             </View>
 
             <ThemedText style={styles.sectionTitle}>
-              Education & Career
+              🎓 Education & Career
             </ThemedText>
 
             {renderFilterInput(
@@ -255,7 +262,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#e0e0e0",
     borderRadius: 25,
     paddingHorizontal: 15,
     backgroundColor: "#f8f9fa",
@@ -271,7 +278,20 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   filterIconButton: {
-    padding: 8,
+    padding: 2,
+  },
+  filterBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E91E63",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#E91E63",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   modalContainer: {
     flex: 1,
@@ -286,27 +306,45 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#e9ecef",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   closeButton: {
-    padding: 5,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f8f9fa",
+    justifyContent: "center",
+    alignItems: "center",
   },
   closeButtonText: {
-    fontSize: 20,
+    fontSize: 16,
     color: "#666",
     fontWeight: "bold",
+  },
+  titleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  filterIcon: {
+    fontSize: 18,
+    marginRight: 8,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333",
+    color: "#E91E63",
   },
   clearButton: {
     padding: 5,
   },
   clearButtonText: {
-    color: "#FF6B6B",
+    color: "#E91E63",
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   modalContent: {
     flex: 1,
@@ -315,26 +353,35 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: "#E91E63",
     marginTop: 20,
     marginBottom: 15,
+    backgroundColor: "#fff",
+    padding: 15,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   inputGroup: {
     marginBottom: 15,
   },
   label: {
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
     color: "#333",
-    marginBottom: 5,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
+    borderColor: "#e0e0e0",
+    borderRadius: 12,
+    padding: 14,
     fontSize: 16,
     backgroundColor: "#fff",
+    color: "#333",
   },
   row: {
     flexDirection: "row",
@@ -348,23 +395,28 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 8,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: "center",
     marginHorizontal: 5,
   },
   cancelAction: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#e0e0e0",
   },
   cancelActionText: {
     color: "#666",
     fontSize: 16,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   applyAction: {
-    backgroundColor: "#FF6B6B",
+    backgroundColor: "#E91E63",
+    shadowColor: "#E91E63",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   applyActionText: {
     color: "#fff",

@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
   Keyboard,
+  Image,
 } from "react-native";
 
 // Validation helper functions (like Shaadi.com/Tinder)
@@ -168,8 +169,14 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ThemedView style={styles.content}>
-        <ThemedText style={styles.title}>Welcome Back</ThemedText>
-        <ThemedText style={styles.subtitle}>Find your perfect match</ThemedText>
+        {/* Logo/Header */}
+        <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <Text style={styles.logoIcon}>💐</Text>
+          </View>
+          <ThemedText style={styles.title}>Welcome Back</ThemedText>
+          <ThemedText style={styles.subtitle}>Find your perfect match</ThemedText>
+        </View>
 
         <View style={styles.form}>
           {renderInput("email", "Email Address", "your@email.com", "email-address")}
@@ -191,10 +198,17 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Don&apos;t have an account? </Text>
+          <Text style={styles.footerText}>Don't have an account? </Text>
           <Link href="/register" style={styles.link}>
             <Text style={styles.linkText}>Sign Up</Text>
           </Link>
+        </View>
+
+        {/* Decorative hearts */}
+        <View style={styles.decorativeHearts}>
+          <Text style={styles.heart}>❤️</Text>
+          <Text style={styles.heart}>💕</Text>
+          <Text style={styles.heart}>❤️</Text>
         </View>
       </ThemedView>
     </KeyboardAvoidingView>
@@ -204,70 +218,109 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#fce4ec",
   },
   content: {
     flex: 1,
     justifyContent: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: 25,
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: 40,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#E91E63",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    shadowColor: "#E91E63",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  logoIcon: {
+    fontSize: 40,
   },
   title: {
     fontSize: 32,
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 8,
-    color: "#FF6B6B",
+    color: "#E91E63",
   },
   subtitle: {
     fontSize: 16,
     textAlign: "center",
-    marginBottom: 40,
+    marginBottom: 10,
     color: "#666",
   },
   form: {
-    marginBottom: 30,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 25,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
+    borderColor: "#e0e0e0",
+    borderRadius: 12,
     padding: 15,
-    marginBottom: 15,
+    marginBottom: 18,
     fontSize: 16,
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "#fafafa",
+    color: "#333",
   },
   button: {
-    backgroundColor: "#FF6B6B",
-    borderRadius: 8,
-    padding: 15,
+    backgroundColor: "#E91E63",
+    borderRadius: 12,
+    padding: 16,
     alignItems: "center",
+    marginTop: 10,
+    shadowColor: "#E91E63",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   buttonDisabled: {
     opacity: 0.6,
+    shadowColor: "transparent",
   },
   buttonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
   },
   footer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 30,
   },
   footerText: {
     color: "#666",
+    fontSize: 15,
   },
   link: {
     marginLeft: 5,
   },
   linkText: {
-    color: "#FF6B6B",
+    color: "#E91E63",
     fontWeight: "bold",
+    fontSize: 15,
   },
   // New styles for validation (like Shaadi.com/Tinder)
   inputGroup: {
-    marginBottom: 18,
+    marginBottom: 5,
   },
   labelRow: {
     flexDirection: "row",
@@ -280,20 +333,20 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   requiredStar: {
-    color: "#FF6B6B",
+    color: "#E91E63",
     fontSize: 16,
     fontWeight: "bold",
     marginLeft: 4,
   },
   inputError: {
-    borderColor: "#FF6B6B",
+    borderColor: "#E91E63",
     borderWidth: 2,
   },
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 6,
-    backgroundColor: "#fff5f5",
+    backgroundColor: "#fce4ec",
     padding: 8,
     borderRadius: 6,
   },
@@ -302,18 +355,27 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   errorText: {
-    color: "#dc3545",
+    color: "#c62828",
     fontSize: 13,
     flex: 1,
   },
   forgotPassword: {
     alignSelf: "center",
-    marginTop: 15,
+    marginTop: 20,
   },
   forgotPasswordText: {
-    color: "#FF6B6B",
+    color: "#E91E63",
     fontSize: 14,
     fontWeight: "600",
     textDecorationLine: "underline",
+  },
+  decorativeHearts: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 30,
+  },
+  heart: {
+    fontSize: 24,
+    marginHorizontal: 8,
   },
 });
