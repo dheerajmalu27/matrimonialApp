@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 24,
-    color: "#E91E63",
+    color: "#FF6B6B",
     fontWeight: "bold",
   },
   headerTitleContainer: {
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#E91E63",
+    color: "#FF6B6B",
   },
   placeholder: {
     width: 40,

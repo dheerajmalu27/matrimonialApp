@@ -391,6 +391,22 @@ class ApiService {
     return response;
   }
 
+  async forgotPassword(email: string): Promise<ApiResponse> {
+    const response = await this.makeRequest("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return response;
+  }
+
+  async resetPassword(email: string, otp: string, newPassword: string): Promise<ApiResponse> {
+    const response = await this.makeRequest("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ email, otp, newPassword }),
+    });
+    return response;
+  }
+
   async refreshToken(): Promise<ApiResponse<RefreshTokenResponse>> {
     const refreshToken = await AsyncStorage.getItem("refreshToken");
     if (!refreshToken) {
