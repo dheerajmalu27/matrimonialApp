@@ -1,5 +1,6 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
@@ -10,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Swiper from "react-native-deck-swiper";
 
 const { width, height } = Dimensions.get("window");
@@ -33,6 +35,7 @@ interface Request {
 }
 
 export default function ReceivedRequestsScreen() {
+  const insets = useSafeAreaInsets();
   const [requests, setRequests] = useState<Request[]>([
     {
       id: "1",
@@ -49,7 +52,7 @@ export default function ReceivedRequestsScreen() {
       caste: "Brahmin",
       height: "5'10\"",
       education: "Bachelor's in Engineering",
-      income: "₹12,00,000 - ₹15,00,000",
+      income: "1200000-1500000",
     },
     {
       id: "2",
@@ -66,7 +69,7 @@ export default function ReceivedRequestsScreen() {
       caste: "Jat",
       height: "5'11\"",
       education: "MBBS, MD",
-      income: "₹15,00,000 - ₹20,00,000",
+      income: "1500000-2000000",
     },
     {
       id: "3",
@@ -84,7 +87,7 @@ export default function ReceivedRequestsScreen() {
       caste: "Patel",
       height: "6'0\"",
       education: "MBA",
-      income: "₹25,00,000+",
+      income: "2500000+",
     },
   ]);
 
@@ -136,13 +139,13 @@ export default function ReceivedRequestsScreen() {
           style={[styles.actionButton, styles.declineButton]}
           onPress={() => handleDeclineRequest(item.id)}
         >
-          <Text style={styles.actionButtonText}>✕</Text>
+          <Text style={styles.actionButtonText}>X</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.acceptButton]}
           onPress={() => handleAcceptRequest(item.id)}
         >
-          <Text style={styles.actionButtonText}>✓</Text>
+          <Text style={styles.actionButtonText}>Y</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -158,13 +161,25 @@ export default function ReceivedRequestsScreen() {
     handleAcceptRequest(request.id);
   };
 
+  const pendingCount = requests.filter((r) => r.status === "pending").length;
+
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <ThemedText style={styles.headerTitle}>Received Requests</ThemedText>
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backButtonText}>{'←'}</Text>
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <ThemedText style={styles.headerTitle}>Received Requests</ThemedText>
+          </View>
+          <View style={styles.placeholder} />
+        </View>
         <ThemedText style={styles.headerSubtitle}>
-          {requests.filter((r) => r.status === "pending").length} pending
-          requests
+          {pendingCount} pending {pendingCount === 1 ? "request" : "requests"}
         </ThemedText>
       </View>
 
@@ -237,20 +252,47 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 5,
+    paddingVertical: 15,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#e9ecef",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  backButton: {
+    padding: 5,
+    width: 40,
+  },
+  backButtonText: {
+    fontSize: 24,
+    color: "#FF6B6B",
+    fontWeight: "bold",
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: "center",
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
     color: "#FF6B6B",
-    marginBottom: 5,
+  },
+  placeholder: {
+    width: 40,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#666",
+    textAlign: "center",
   },
   swiperContainer: {
     flex: 1,

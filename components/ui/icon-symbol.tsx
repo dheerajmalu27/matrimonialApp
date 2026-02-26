@@ -29,6 +29,7 @@ const MAPPING = {
   "message.fill": "message",
   "arrow.right.square": "logout",
   "location.fill": "location-on",
+  "line.3.horizontal.decrease.circle": "filter-list",
 } as IconMapping;
 
 /**

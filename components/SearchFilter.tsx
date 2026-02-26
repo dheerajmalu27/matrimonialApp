@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
+import { IconSymbol } from "./ui/icon-symbol";
 
 export interface FilterOptions {
   ageMin: string;
@@ -125,22 +126,22 @@ export default function SearchFilter({
     <ThemedView style={styles.container}>
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name, location, or occupation..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
-        <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-          <Text style={styles.searchButtonText}>🔍</Text>
-        </TouchableOpacity>
+        <View style={styles.searchInputContainer}>
+          <IconSymbol name="magnifyingglass" size={20} color="#999" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name, location, or occupation..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+        </View>
         <TouchableOpacity
-          style={styles.filterButton}
+          style={styles.filterIconButton}
           onPress={() => setShowFilters(true)}
         >
-          <Text style={styles.filterButtonText}>🔽</Text>
+          <IconSymbol name="line.3.horizontal.decrease.circle" size={24} color="#FF6B6B" />
         </TouchableOpacity>
       </View>
 
@@ -246,46 +247,31 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flexDirection: "row",
+    alignItems: "center",
     marginBottom: 10,
   },
-  searchInput: {
+  searchInputContainer: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: "#ddd",
     borderRadius: 25,
     paddingHorizontal: 15,
-    paddingVertical: 10,
-    fontSize: 16,
     backgroundColor: "#f8f9fa",
     marginRight: 10,
   },
-  searchButton: {
-    width: 50,
-    height: 45,
-    backgroundColor: "#FF6B6B",
-    borderRadius: 22.5,
-    justifyContent: "center",
-    alignItems: "center",
+  searchIcon: {
+    marginRight: 8,
   },
-  searchButtonText: {
-    fontSize: 18,
-    color: "#fff",
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: "#333",
   },
-  filterButton: {
-    width: 50,
-    height: 45,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 22.5,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    marginLeft: 10,
-  },
-  filterButtonText: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "500",
+  filterIconButton: {
+    padding: 8,
   },
   modalContainer: {
     flex: 1,

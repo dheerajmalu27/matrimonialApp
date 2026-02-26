@@ -96,6 +96,21 @@ interface UserProfile {
   partnerPreferences: any;
 }
 
+// Helper function to safely join array
+const safeJoin = (arr: any, separator: string = ", "): string => {
+  if (Array.isArray(arr) && arr.length > 0) {
+    return arr.join(separator);
+  }
+  return "Not specified";
+};
+
+// Helper function to convert boolean to Yes/No string
+const booleanToYesNo = (value: any | null | undefined): string => {
+  if (value == true|| value == 'true') return "Yes";
+  if (value == false|| value == 'false') return "No";
+  return "Not specified";
+};
+
 export default function ProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -136,11 +151,24 @@ export default function ProfileScreen() {
     if (!profile) return;
 
     try {
+      // Parse hobbies and interests from comma-separated string to array
+      const hobbiesArray = formData.hobbies ? formData.hobbies.split(',').map((h: string) => h.trim()).filter((h: string) => h) : [];
+      const interestsArray = formData.interests ? formData.interests.split(',').map((i: string) => i.trim()).filter((i: string) => i) : [];
+
+      // Convert smoking/drinking string to boolean
+      const convertToBoolean = (value: string): boolean | null => {
+        if (value === "Yes") return true;
+        if (value === "No") return false;
+        return null;
+      };
+
       const updateData = {
         personal: {
           ...profile.personal,
           fullName: formData.name,
           age: parseInt(formData.age),
+          dateOfBirth: formData.birthDate ? formData.birthDate : profile.personal?.dateOfBirth,
+          birthTime: formData.birthTime || profile.personal?.birthTime,
           aboutMe: formData.bio,
           height: formData.height,
         },
@@ -148,6 +176,7 @@ export default function ProfileScreen() {
           ...profile.religion,
           religion: formData.religion,
           caste: formData.caste,
+          manglik: formData.manglik || profile.religion?.manglik,
         },
         professional: {
           ...profile.professional,
@@ -156,15 +185,9 @@ export default function ProfileScreen() {
         },
         addresses: [
           {
-            ...profile.addresses[0],
-            city:
-              formData.location.split(",")[0]?.trim() ||
-              profile.addresses[0]?.city ||
-              "",
-            state:
-              formData.location.split(",")[1]?.trim() ||
-              profile.addresses[0]?.state ||
-              "",
+            ...(profile.addresses?.[0] || { type: "permanent", city: "", state: "", country: "India", pincode: "" }),
+            city: formData.location?.split(",")[0]?.trim() || profile.addresses?.[0]?.city || "",
+            state: formData.location?.split(",")[1]?.trim() || profile.addresses?.[0]?.state || "",
             country: "India",
             type: "permanent",
           },
@@ -180,9 +203,34 @@ export default function ProfileScreen() {
               },
             ]
           : profile.education,
-        family: profile.family,
-        lifestyle: profile.lifestyle,
-        kundli: profile.kundli,
+        family: {
+          fatherName: formData.fatherName || "",
+          fatherOccupation: formData.fatherOccupation || "",
+          motherName: formData.motherName || "",
+          motherOccupation: formData.motherOccupation || "",
+          siblings: formData.siblings || "",
+          familyType: formData.familyType || "",
+          familyValues: formData.familyValues || "",
+          familyStatus: profile.family?.familyStatus || "",
+        },
+        lifestyle: {
+          diet: formData.diet || "",
+          smoking: convertToBoolean(formData.smoking),
+          drinking: convertToBoolean(formData.drinking),
+          hobbies: hobbiesArray,
+          interests: interestsArray,
+        },
+        kundli: {
+          birthPlace: formData.birthPlace || "",
+          birthTime: formData.birthTime || "",
+          manglik: formData.manglik || "",
+          gotra: profile.kundli?.gotra || "",
+          rashi: formData.rashi || "",
+          nakshatra: formData.nakshatra || "",
+          charan: profile.kundli?.charan || "",
+          gan: profile.kundli?.gan || "",
+          nadi: profile.kundli?.nadi || "",
+        },
         partnerPreferences: profile.partnerPreferences,
       };
 
@@ -300,6 +348,26 @@ export default function ProfileScreen() {
                   ? profile.education[0].degree
                   : "",
               income: profile.professional?.annualIncome || "",
+              // Family data
+              fatherName: profile.family?.fatherName || "",
+              fatherOccupation: profile.family?.fatherOccupation || "",
+              motherName: profile.family?.motherName || "",
+              motherOccupation: profile.family?.motherOccupation || "",
+              siblings: profile.family?.siblings || "",
+              familyType: profile.family?.familyType || "",
+              familyValues: profile.family?.familyValues || "",
+              // Lifestyle data
+              diet: profile.lifestyle?.diet || "",
+              smoking: booleanToYesNo(profile.lifestyle?.smoking),
+              drinking: booleanToYesNo(profile.lifestyle?.drinking),
+              hobbies: safeJoin(profile.lifestyle?.hobbies, ", "),
+              interests: safeJoin(profile.lifestyle?.interests, ", "),
+              // Kundli data
+              birthPlace: profile.kundli?.birthPlace || "",
+              birthTime: profile.kundli?.birthTime || "",
+              manglik: profile.kundli?.manglik || profile.religion?.manglik || "",
+              rashi: profile.kundli?.rashi || "",
+              nakshatra: profile.kundli?.nakshatra || "",
             }}
             onSubmit={handleSaveProfile}
             submitButtonText="Save Profile"
@@ -532,37 +600,25 @@ export default function ProfileScreen() {
             <View style={styles.infoRow}>
               <ThemedText style={styles.infoLabel}>Smoking:</ThemedText>
               <ThemedText style={styles.infoValue}>
-                {profile.lifestyle?.smoking === null
-                  ? "Not specified"
-                  : profile.lifestyle.smoking
-                    ? "Yes"
-                    : "No"}
+                {booleanToYesNo(profile.lifestyle?.smoking)}
               </ThemedText>
             </View>
             <View style={styles.infoRow}>
               <ThemedText style={styles.infoLabel}>Drinking:</ThemedText>
               <ThemedText style={styles.infoValue}>
-                {profile.lifestyle?.drinking === null
-                  ? "Not specified"
-                  : profile.lifestyle.drinking
-                    ? "Yes"
-                    : "No"}
+                {booleanToYesNo(profile.lifestyle?.drinking)}
               </ThemedText>
             </View>
             <View style={styles.infoRow}>
               <ThemedText style={styles.infoLabel}>Hobbies:</ThemedText>
               <ThemedText style={styles.infoValue}>
-                {profile.lifestyle?.hobbies?.length > 0
-                  ? profile.lifestyle.hobbies.join(", ")
-                  : "Not specified"}
+                {safeJoin(profile.lifestyle?.hobbies)}
               </ThemedText>
             </View>
             <View style={styles.infoRow}>
               <ThemedText style={styles.infoLabel}>Interests:</ThemedText>
               <ThemedText style={styles.infoValue}>
-                {profile.lifestyle?.interests?.length > 0
-                  ? profile.lifestyle.interests.join(", ")
-                  : "Not specified"}
+                {safeJoin(profile.lifestyle?.interests)}
               </ThemedText>
             </View>
           </View>
@@ -572,13 +628,13 @@ export default function ProfileScreen() {
             <View style={styles.infoRow}>
               <ThemedText style={styles.infoLabel}>Birth Place:</ThemedText>
               <ThemedText style={styles.infoValue}>
-                {profile.kundli?.birthPlace}
+                {profile.kundli?.birthPlace || "Not specified"}
               </ThemedText>
             </View>
             <View style={styles.infoRow}>
               <ThemedText style={styles.infoLabel}>Birth Time:</ThemedText>
               <ThemedText style={styles.infoValue}>
-                {profile.kundli?.birthTime}
+                {profile.kundli?.birthTime || "Not specified"}
               </ThemedText>
             </View>
             <View style={styles.infoRow}>
@@ -596,7 +652,7 @@ export default function ProfileScreen() {
             <View style={styles.infoRow}>
               <ThemedText style={styles.infoLabel}>Nakshatra:</ThemedText>
               <ThemedText style={styles.infoValue}>
-                {profile.kundli?.nakshatra}
+                {profile.kundli?.nakshatra || "Not specified"}
               </ThemedText>
             </View>
           </View>

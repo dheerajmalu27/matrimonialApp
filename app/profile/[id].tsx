@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconSymbol } from "../../components/ui/icon-symbol";
 
 const { width } = Dimensions.get("window");
@@ -98,6 +99,7 @@ interface Profile {
 
 export default function ProfileDetailScreen() {
   const { id } = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -209,7 +211,7 @@ export default function ProfileDetailScreen() {
 
   if (loading) {
     return (
-      <ThemedView style={styles.container}>
+      <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
           <ThemedText style={styles.loadingText}>Loading profile...</ThemedText>
         </View>
@@ -219,7 +221,7 @@ export default function ProfileDetailScreen() {
 
   if (!profile) {
     return (
-      <ThemedView style={styles.container}>
+      <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.errorContainer}>
           <ThemedText style={styles.errorText}>Profile not found</ThemedText>
           <TouchableOpacity
@@ -234,7 +236,7 @@ export default function ProfileDetailScreen() {
   }
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <TouchableOpacity

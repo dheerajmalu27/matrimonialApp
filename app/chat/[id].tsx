@@ -13,12 +13,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Message {
   id: string;
   text: string;
   timestamp: string;
-  isSent: boolean; // true if sent by current user, false if received
+  isSent: boolean;
 }
 
 interface Conversation {
@@ -47,7 +48,6 @@ const formatMessageTime = (timestamp: string) => {
   } else if (diffInDays < 7) {
     return `${diffInDays}d ago`;
   } else {
-    // For older messages, show date like "Dec 25" or "12/25/23"
     return messageTime.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -60,6 +60,7 @@ const formatMessageTime = (timestamp: string) => {
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -90,8 +91,6 @@ export default function ChatScreen() {
     try {
       setLoading(true);
       setError(null);
-
-      // The ID from URL params is the conversation ID, not user ID
       await loadConversationMessages(id as string);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load chat");
@@ -110,7 +109,7 @@ export default function ChatScreen() {
           id: participant.id,
           name: participant.name,
           image: participant.profileImage || "https://via.placeholder.com/150",
-          isOnline: false, // API doesn't provide online status
+          isOnline: false,
         });
 
         const mappedMessages = response.data.messages.map((msg) => ({
@@ -178,8 +177,7 @@ export default function ChatScreen() {
   }
 
   return (
-    <ThemedView style={styles.container}>
-      {/* Header */}
+    <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -203,18 +201,15 @@ export default function ChatScreen() {
         </View>
       </View>
 
-      {/* Messages List */}
       <FlatList
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesContainer}
         showsVerticalScrollIndicator={false}
-        inverted={false} // Messages appear from top to bottom
       />
 
-      {/* Message Input */}
-      <View style={[styles.inputContainer, { paddingBottom: 34 }]}>
+      <View style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}>
         <TextInput
           style={styles.textInput}
           placeholder="Type a message..."

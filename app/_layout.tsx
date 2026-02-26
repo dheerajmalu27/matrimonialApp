@@ -48,23 +48,24 @@ export default function RootLayout() {
         <Stack.Screen name="send-request" options={{ headerShown: false }} />
         <Stack.Screen
           name="received-requests"
-          options={{
-            headerShown: true,
-            title: "Received Requests",
-            headerLeft: () => (
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={{ marginLeft: 15 }}
-              >
-                <Text style={{ fontSize: 18, color: "#FF6B6B" }}>←</Text>
-              </TouchableOpacity>
-            ),
-          }}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="sent-requests"
+          options={{ headerShown: false }}
         />
         <Stack.Screen name="change-password" options={{ headerShown: false }} />
         <Stack.Screen
           name="modal"
           options={{ presentation: "modal", title: "Modal" }}
+        />
+        <Stack.Screen
+          name="chat/[id]"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="profile/[id]"
+          options={{ headerShown: false }}
         />
       </Stack>
       <StatusBar style="auto" />

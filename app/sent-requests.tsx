@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface SentRequest {
   id: string;
@@ -24,6 +25,7 @@ interface SentRequest {
 }
 
 export default function SentRequestsScreen() {
+  const insets = useSafeAreaInsets();
   const [requests, setRequests] = useState<SentRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,13 +147,25 @@ export default function SentRequestsScreen() {
     </View>
   );
 
+  const pendingCount = requests.filter((r) => r.status === "pending").length;
+
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <ThemedText style={styles.headerTitle}>Sent Requests</ThemedText>
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <ThemedText style={styles.headerTitle}>Sent Requests</ThemedText>
+          </View>
+          <View style={styles.placeholder} />
+        </View>
         <ThemedText style={styles.headerSubtitle}>
-          {requests.filter((r) => r.status === "pending").length} pending
-          requests
+          {pendingCount} pending {pendingCount === 1 ? "request" : "requests"}
         </ThemedText>
       </View>
 
@@ -177,16 +191,43 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#e9ecef",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  backButton: {
+    padding: 5,
+    width: 40,
+  },
+  backButtonText: {
+    fontSize: 24,
+    color: "#FF6B6B",
+    fontWeight: "bold",
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: "center",
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
     color: "#FF6B6B",
-    marginBottom: 5,
+  },
+  placeholder: {
+    width: 40,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#666",
+    textAlign: "center",
   },
   listContainer: {
     padding: 20,
