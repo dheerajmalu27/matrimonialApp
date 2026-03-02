@@ -1,8 +1,10 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { apiService } from "@/services/api";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
     Alert,
     ScrollView,
     StyleSheet,
@@ -21,6 +23,40 @@ interface SettingItem {
   action?: () => void;
 }
 
+interface MonetizationFeatures {
+  basicMessaging: boolean;
+  limitedSearch: boolean;
+  advancedSearch: boolean;
+  verifiedBadge: boolean;
+  unlimitedInterests: boolean;
+  dailyInterestsLimit: number | null;
+}
+
+interface MonetizationStatus {
+  activePlan: "free" | "premium";
+  planCode: string;
+  usage: {
+    interestsSentToday: number;
+  };
+  features: MonetizationFeatures;
+}
+
+interface MonetizationConfig {
+  currency: string;
+  plans: {
+    free: {
+      displayName: string;
+      priceInr: number;
+      features: MonetizationFeatures;
+    };
+    premium: {
+      displayName: string;
+      priceInr: number;
+      features: MonetizationFeatures;
+    };
+  };
+}
+
 export default function SettingsScreen() {
   const [settings, setSettings] = useState({
     notifications: true,
@@ -28,6 +64,55 @@ export default function SettingsScreen() {
     profileVisibility: true,
     matchNotifications: true,
   });
+  const [loadingMonetization, setLoadingMonetization] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+  const [monetizationConfig, setMonetizationConfig] = useState<MonetizationConfig | null>(null);
+  const [monetizationStatus, setMonetizationStatus] = useState<MonetizationStatus | null>(null);
+
+  const fetchMonetization = async () => {
+    try {
+      setLoadingMonetization(true);
+      const response = await apiService.getMonetizationConfig();
+      if (response.success && response.data) {
+        setMonetizationConfig(response.data.config as MonetizationConfig);
+        setMonetizationStatus(response.data.user as MonetizationStatus);
+      } else {
+        Alert.alert("Info", response.message || "Unable to load subscription details.");
+      }
+    } catch (error) {
+      console.error("Monetization fetch error:", error);
+      Alert.alert("Error", "Failed to load subscription info.");
+    } finally {
+      setLoadingMonetization(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMonetization();
+  }, []);
+
+  const handleUpgrade = async () => {
+    try {
+      setUpgrading(true);
+      const orderRes = await apiService.createPremiumOrder();
+
+      if (!orderRes.success || !orderRes.data) {
+        Alert.alert("Upgrade", orderRes.message || "Unable to create premium order.");
+        return;
+      }
+
+      const amount = orderRes.data.plan.amountInr;
+      Alert.alert(
+        "Razorpay Order Ready",
+        `Order created for ₹${amount}.\n\nNext step: connect Razorpay Checkout SDK in app and call verify API after payment success.`,
+      );
+    } catch (error) {
+      console.error("Upgrade error:", error);
+      Alert.alert("Error", "Failed to start premium upgrade.");
+    } finally {
+      setUpgrading(false);
+    }
+  };
 
   const handleToggle = (setting: string) => {
     setSettings((prev) => ({
@@ -145,6 +230,94 @@ export default function SettingsScreen() {
     </View>
   );
 
+  const renderMonetizationSection = () => {
+    if (loadingMonetization) {
+      return (
+        <View style={styles.settingsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionIcon}>💳</Text>
+            <Text style={styles.sectionTitle}>Subscription</Text>
+          </View>
+          <View style={styles.monetizationLoading}>
+            <ActivityIndicator size="small" color="#E91E63" />
+            <Text style={styles.settingSubtitle}>Loading plan details...</Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (!monetizationConfig || !monetizationStatus) {
+      return (
+        <View style={styles.settingsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionIcon}>💳</Text>
+            <Text style={styles.sectionTitle}>Subscription</Text>
+          </View>
+          <View style={styles.monetizationLoading}>
+            <Text style={styles.settingSubtitle}>Subscription config not available.</Text>
+            <TouchableOpacity style={styles.refreshButton} onPress={fetchMonetization}>
+              <Text style={styles.refreshButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    const freePlan = monetizationConfig.plans.free;
+    const premiumPlan = monetizationConfig.plans.premium;
+    const activePlanName = monetizationStatus.activePlan === "premium" ? premiumPlan.displayName : freePlan.displayName;
+    const freeLimit = freePlan.features.dailyInterestsLimit;
+
+    return (
+      <View style={styles.settingsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>💳</Text>
+          <Text style={styles.sectionTitle}>Subscription</Text>
+        </View>
+        <View style={styles.monetizationCard}>
+          <Text style={styles.planLabel}>Current Plan: {activePlanName}</Text>
+          <Text style={styles.planUsage}>
+            Interests today: {monetizationStatus.usage.interestsSentToday}
+            {freeLimit ? ` / ${freeLimit} (Free Limit)` : ""}
+          </Text>
+
+          <View style={styles.featuresBlock}>
+            <Text style={styles.featuresTitle}>Free Tier</Text>
+            <Text style={styles.featuresText}>- Daily interests: {freeLimit ?? "Unlimited"}</Text>
+            <Text style={styles.featuresText}>- Basic messaging: {freePlan.features.basicMessaging ? "Yes" : "No"}</Text>
+            <Text style={styles.featuresText}>- Limited search: {freePlan.features.limitedSearch ? "Yes" : "No"}</Text>
+            <Text style={styles.featuresText}>- Verified badge: {freePlan.features.verifiedBadge ? "Yes" : "No"}</Text>
+            <Text style={styles.featuresText}>- Advanced search: {freePlan.features.advancedSearch ? "Yes" : "No"}</Text>
+          </View>
+
+          <View style={styles.featuresBlock}>
+            <Text style={styles.featuresTitle}>Premium ({premiumPlan.displayName})</Text>
+            <Text style={styles.featuresText}>- Price: ₹{premiumPlan.priceInr}/year</Text>
+            <Text style={styles.featuresText}>- Unlimited interests: {premiumPlan.features.unlimitedInterests ? "Yes" : "No"}</Text>
+            <Text style={styles.featuresText}>- Verified badge: {premiumPlan.features.verifiedBadge ? "Yes" : "No"}</Text>
+            <Text style={styles.featuresText}>- Advanced search: {premiumPlan.features.advancedSearch ? "Yes" : "No"}</Text>
+          </View>
+
+          <View style={styles.monetizationActions}>
+            <TouchableOpacity style={styles.refreshButton} onPress={fetchMonetization}>
+              <Text style={styles.refreshButtonText}>Refresh</Text>
+            </TouchableOpacity>
+
+            {monetizationStatus.activePlan !== "premium" && (
+              <TouchableOpacity
+                style={[styles.upgradeButton, upgrading && styles.buttonDisabled]}
+                onPress={handleUpgrade}
+                disabled={upgrading}
+              >
+                <Text style={styles.upgradeButtonText}>{upgrading ? "Creating Order..." : "Upgrade"}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -168,6 +341,8 @@ export default function SettingsScreen() {
             {settingItems.slice(0, 4).map(renderSettingItem)}
           </View>
         </View>
+
+        {renderMonetizationSection()}
 
         {/* Support Section */}
         <View style={styles.settingsSection}>
@@ -278,6 +453,72 @@ const styles = StyleSheet.create({
   },
   sectionContent: {
     paddingHorizontal: 5,
+  },
+  monetizationLoading: {
+    paddingVertical: 18,
+    paddingHorizontal: 15,
+    alignItems: "center",
+    gap: 8,
+  },
+  monetizationCard: {
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+  },
+  planLabel: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#333",
+    marginBottom: 6,
+  },
+  planUsage: {
+    fontSize: 13,
+    color: "#666",
+    marginBottom: 10,
+  },
+  featuresBlock: {
+    marginBottom: 10,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 10,
+    padding: 10,
+  },
+  featuresTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#E91E63",
+    marginBottom: 4,
+  },
+  featuresText: {
+    fontSize: 12,
+    color: "#444",
+    marginBottom: 2,
+  },
+  monetizationActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  refreshButton: {
+    backgroundColor: "#f0f0f0",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  refreshButtonText: {
+    color: "#333",
+    fontWeight: "600",
+  },
+  upgradeButton: {
+    backgroundColor: "#E91E63",
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  upgradeButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   settingItem: {
     flexDirection: "row",

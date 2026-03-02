@@ -1,36 +1,3 @@
-// Pre-defined options for dropdowns (similar to Shaadi.com, Tinder)
-const AGE_OPTIONS = Array.from({ length: 43 }, (_, i) => (i + 18).toString());
-const HEIGHT_OPTIONS = [
-  "4'0\"", "4'1\"", "4'2\"", "4'3\"", "4'4\"", "4'5\"", "4'6\"", "4'7\"", "4'8\"", "4'9\"",
-  "5'0\"", "5'1\"", "5'2\"", "5'3\"", "5'4\"", "5'5\"", "5'6\"", "5'7\"", "5'8\"", "5'9\"",
-  "6'0\"", "6'1\"", "6'2\"", "6'3\"", "6'4\"", "6'5\"", "6'6\"", "6'7\"", "6'8\"", "6'9\"",
-  "7'0\""
-];
-
-const RELIGION_OPTIONS = [
-  "Hindu", "Muslim", "Christian", "Sikh", "Parsi", "Jain", "Buddhist", "Jewish", "Other"
-];
-
-const CASTE_OPTIONS = [
-  "General", "OBC", "SC", "ST", "Brahmin", "Kshatriya", "Vaishya", "Shudra", "Other"
-];
-
-const EDUCATION_OPTIONS = [
-  "High School", "Diploma", "Bachelor's", "Master's", "Doctorate", "Professional",
-  "Engineering", "Medical", "Law", "Arts", "Commerce", "Science", "Other"
-];
-
-const OCCUPATION_OPTIONS = [
-  "Engineer", "Doctor", "Teacher", "Business", "Software", "Manager", "Consultant",
-  "Architect", "Lawyer", "CA", "Banker", "Government", "Defence", "Healthcare",
-  "Marketing", "Sales", "HR", "Finance", "IT", "Other"
-];
-
-const INCOME_OPTIONS = [
-  "Below ₹1 LPA", "₹1-3 LPA", "₹3-5 LPA", "₹5-8 LPA", "₹8-10 LPA",
-  "₹10-15 LPA", "₹15-20 LPA", "₹20-30 LPA", "₹30-50 LPA", "Above ₹50 LPA"
-];
-
 import React, { useState } from "react";
 import {
   Alert,
@@ -46,6 +13,15 @@ import {
 import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
 import { IconSymbol } from "./ui/icon-symbol";
+import {
+  AGE_OPTIONS,
+  HEIGHT_OPTIONS,
+  RELIGION_OPTIONS,
+  CASTE_OPTIONS,
+  EDUCATION_OPTIONS,
+  OCCUPATION_OPTIONS,
+  INCOME_FILTER_OPTIONS,
+} from "../constants/dropdownOptions";
 
 export interface FilterOptions {
   ageMin: string;
@@ -371,7 +347,7 @@ export default function SearchFilter({
             <Dropdown
               label="Income Range"
               value={filters.income}
-              options={INCOME_OPTIONS}
+              options={INCOME_FILTER_OPTIONS}
               onSelect={(value) => updateFilter("income", value)}
               placeholder="Select income range"
             />

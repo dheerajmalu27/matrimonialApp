@@ -15,6 +15,7 @@ import { ImageSlider } from "@/components/ImageSlider";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { router, useLocalSearchParams } from "expo-router";
+import apiService from "@/services/api";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -28,11 +29,15 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width } = Dimensions.get("window");
 
 interface Profile {
   id: string;
+  interestStatus?: string | null;
+  interestIsSender?: boolean | null;
+  requestStatus?: RequestStatus;
   email: string;
   mobile: string;
   gender: string;
@@ -119,6 +124,55 @@ const booleanToYesNo = (value: any | null | undefined): string => {
   return "Not specified";
 };
 
+// Helper function to convert string to array (comma-separated) or return array as-is
+const convertToArray = (value: any): string[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    return value.split(',').map(item => item.trim()).filter(item => item);
+  }
+  return [];
+};
+
+// Helper function to check if a value exists in a comma-separated string (case-insensitive)
+const isValueInPreference = (profileValue: string, preferenceValue: string): boolean => {
+  if (!preferenceValue || !profileValue) return false;
+  const preferenceArray = convertToArray(preferenceValue).map(v => v.toLowerCase().trim());
+  return preferenceArray.includes(profileValue.toLowerCase().trim());
+};
+
+// Helper function to convert height from CM to feet/inches format
+const convertCmToFeet = (heightCm: number): string => {
+  if (!heightCm || heightCm <= 0) return "";
+  
+  // Convert cm to inches (1 inch = 2.54 cm)
+  const totalInches = heightCm / 2.54;
+  
+  // Calculate feet and remaining inches
+  const feet = Math.floor(totalInches / 12);
+  const inches = Math.round(totalInches % 12);
+  
+  // Return formatted string (e.g., "5' 6\"")
+  return `${feet}' ${inches}"`;
+};
+
+// Interface for partner preference
+interface PartnerPreference {
+  userId: string;
+  minAge: number;
+  maxAge: number;
+  minHeightCm: number;
+  maxHeightCm: number;
+  religion: string;
+  caste: string;
+  education: string;
+  occupation: string;
+  location: string;
+  incomeRange: string;
+  motherTongue: string;
+  kundliMatchRequired: boolean;
+  manglikPreference: string;
+}
+
 export default function ProfileDetailScreen() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
@@ -127,20 +181,50 @@ export default function ProfileDetailScreen() {
   const [requestStatus, setRequestStatus] = useState<RequestStatus>("none");
   const [showMatchDetails, setShowMatchDetails] = useState(false);
 
-  // User's preferences (dummy data - in real app would come from user's profile)
-  const userPreferences = {
+  const getInitialStatus = (profileData: Partial<Profile> | null | undefined): RequestStatus => {
+    if (!profileData) return "none";
+    if (profileData.interestStatus === "sent" || profileData.interestStatus === "pending") {
+      return profileData.interestIsSender ? "sent" : "received";
+    }
+    if (profileData.interestStatus === "accepted") return "accepted";
+    if (profileData.interestStatus === "declined") return "declined";
+    return profileData.requestStatus || "none";
+  };
+
+  // User's preferences - loaded from localStorage
+  const [userPreferences, setUserPreferences] = useState<any>({
     minAge: 25,
     maxAge: 35,
     minHeightCm: 150,
     maxHeightCm: 180,
-    religion: "Hindu",
-    caste: "Brahmin",
-    education: "Engineering",
-    city: "Jaipur",
-    state: "Rajasthan",
-    motherTongue: "Gujarati",
-    kundliMatchRequired: true,
-  };
+    religion: "",
+    caste: "",
+    education: "",
+    occupation: "",
+    location: "",
+    incomeRange: "",
+    motherTongue: "",
+    kundliMatchRequired: false,
+    manglikPreference: "both",
+  });
+
+  // Load user preferences from localStorage
+  useEffect(() => {
+    const loadUserPreferences = async () => {
+      try {
+        const userProfileStr = await AsyncStorage.getItem("userProfile");
+        if (userProfileStr) {
+          const userProfile = JSON.parse(userProfileStr);
+          if (userProfile.partnerPreference) {
+            setUserPreferences(userProfile.partnerPreference);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading user preferences:", error);
+      }
+    };
+    loadUserPreferences();
+  }, []);
 
   // Handle sending interest
   const handleSendInterest = () => {
@@ -152,9 +236,19 @@ export default function ProfileDetailScreen() {
         { text: "Cancel", style: "cancel" },
         {
           text: "Send",
-          onPress: () => {
-            setRequestStatus("sent");
-            Alert.alert("Interest Sent! ✨", "Your interest has been sent. They will be notified.");
+          onPress: async () => {
+            try {
+              const response = await apiService.sendInterest(profile.id);
+              if (response.success) {
+                setRequestStatus("sent");
+                Alert.alert("Interest Sent! ✨", `Your interest has been sent to ${profile.personal?.fullName || "this profile"}. They will be notified.`);
+              } else {
+                Alert.alert("Error", response.message || "Failed to send interest. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error sending interest:", error);
+              Alert.alert("Error", "Failed to send interest. Please check your connection and try again.");
+            }
           },
         },
       ]
@@ -172,9 +266,19 @@ export default function ProfileDetailScreen() {
         {
           text: "Yes, Cancel",
           style: "destructive",
-          onPress: () => {
-            setRequestStatus("none");
-            Alert.alert("Request Cancelled", "Your interest request has been cancelled.");
+          onPress: async () => {
+            try {
+              const response = await apiService.cancelInterest(profile.id);
+              if (response.success) {
+                setRequestStatus("none");
+                Alert.alert("Request Cancelled", "Your interest request has been cancelled.");
+              } else {
+                Alert.alert("Error", response.message || "Failed to cancel interest. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error canceling interest:", error);
+              Alert.alert("Error", "Failed to cancel interest. Please check your connection and try again.");
+            }
           },
         },
       ]
@@ -191,16 +295,36 @@ export default function ProfileDetailScreen() {
         {
           text: "Reject",
           style: "destructive",
-          onPress: () => {
-            setRequestStatus("declined");
-            Alert.alert("Rejected", "You have declined this request.");
+          onPress: async () => {
+            try {
+              const response = await apiService.rejectInterest(profile.id);
+              if (response.success) {
+                setRequestStatus("declined");
+                Alert.alert("Rejected", `You have declined the request from ${profile.personal?.fullName || "this user"}.`);
+              } else {
+                Alert.alert("Error", response.message || "Failed to reject interest. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error rejecting interest:", error);
+              Alert.alert("Error", "Failed to reject interest. Please check your connection and try again.");
+            }
           },
         },
         {
           text: "Accept",
-          onPress: () => {
-            setRequestStatus("accepted");
-            Alert.alert("Request Accepted! 🎉", "You are now connected! You can now message each other.");
+          onPress: async () => {
+            try {
+              const response = await apiService.acceptInterest(profile.id);
+              if (response.success) {
+                setRequestStatus("accepted");
+                Alert.alert("Request Accepted! 🎉", `You and ${profile.personal?.fullName || "this user"} are now connected! You can now message each other.`);
+              } else {
+                Alert.alert("Error", response.message || "Failed to accept interest. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error accepting interest:", error);
+              Alert.alert("Error", "Failed to accept interest. Please check your connection and try again.");
+            }
           },
         },
       ]
@@ -246,9 +370,11 @@ export default function ProfileDetailScreen() {
       theirValue: `${profileHeight} cm`,
     });
 
-    // 🛕 Religion & Caste (20 points)
-    const religionMatch = profile.religion?.religion === userPreferences.religion;
-    const casteMatch = profile.religion?.caste === userPreferences.caste;
+    // 🛕 Religion & Caste (20 points) - Multi-value support
+    const profileReligion = profile.religion?.religion || "";
+    const profileCaste = profile.religion?.caste || "";
+    const religionMatch = isValueInPreference(profileReligion, userPreferences.religion);
+    const casteMatch = isValueInPreference(profileCaste, userPreferences.caste);
     const religionCasteMatch = religionMatch && casteMatch;
     if (religionCasteMatch) score += 20;
     details.push({
@@ -256,59 +382,102 @@ export default function ProfileDetailScreen() {
       icon: "🛕",
       points: 20,
       matched: religionCasteMatch,
-      yourPreference: `${userPreferences.religion}, ${userPreferences.caste}`,
-      theirValue: `${profile.religion?.religion || "N/A"}, ${profile.religion?.caste || "N/A"}`,
+      yourPreference: userPreferences.religion || "Any",
+      theirValue: `${profileReligion || "N/A"}, ${profileCaste || "N/A"}`,
     });
 
-    // 🎓 Education (15 points)
+    // 🎓 Education (15 points) - Multi-value support
     const profileEducation = profile.education?.[0]?.degree || "";
-    const educationMatch = profileEducation.toLowerCase().includes(userPreferences.education.toLowerCase());
+    const educationMatch = isValueInPreference(profileEducation, userPreferences.education);
     if (educationMatch) score += 15;
     details.push({
       criteria: "Education",
       icon: "🎓",
       points: 15,
       matched: educationMatch,
-      yourPreference: userPreferences.education,
+      yourPreference: userPreferences.education || "Any",
       theirValue: profileEducation || "N/A",
     });
 
-    // 📍 Location (10 points)
+    // 💼 Occupation (10 points) - Multi-value support
+    const profileOccupation = profile.professional?.occupation || "";
+    const occupationMatch = isValueInPreference(profileOccupation, userPreferences.occupation);
+    if (occupationMatch) score += 10;
+    details.push({
+      criteria: "Occupation",
+      icon: "💼",
+      points: 10,
+      matched: occupationMatch,
+      yourPreference: userPreferences.occupation || "Any",
+      theirValue: profileOccupation || "N/A",
+    });
+
+    // 📍 Location (10 points) - Multi-value support
     const profileCity = profile.addresses?.[0]?.city || "";
     const profileState = profile.addresses?.[0]?.state || "";
-    const locationMatch = profileCity === userPreferences.city || profileState === userPreferences.state;
+    const profileLocation = `${profileCity}, ${profileState}`;
+    const locationMatch = isValueInPreference(profileLocation, userPreferences.location) || 
+                         isValueInPreference(profileCity, userPreferences.location) ||
+                         isValueInPreference(profileState, userPreferences.location);
     if (locationMatch) score += 10;
     details.push({
       criteria: "Location",
       icon: "📍",
       points: 10,
       matched: locationMatch,
-      yourPreference: `${userPreferences.city}, ${userPreferences.state}`,
-      theirValue: `${profileCity}, ${profileState}`,
+      yourPreference: userPreferences.location || "Any",
+      theirValue: profileLocation || "Not specified",
     });
 
-    // 🗣 Mother Tongue (5 points)
-    const motherTongueMatch = profile.personal?.motherTongue === userPreferences.motherTongue;
+    // 💰 Income Range (10 points) - Multi-value support
+    const profileIncome = profile.professional?.annualIncome || "";
+    const incomeMatch = isValueInPreference(profileIncome, userPreferences.incomeRange);
+    if (incomeMatch) score += 10;
+    details.push({
+      criteria: "Income Range",
+      icon: "💰",
+      points: 10,
+      matched: incomeMatch,
+      yourPreference: userPreferences.incomeRange || "Any",
+      theirValue: profileIncome || "N/A",
+    });
+
+    // 🗣 Mother Tongue (5 points) - Multi-value support
+    const profileMotherTongue = profile.personal?.motherTongue || "";
+    console.log(profileMotherTongue);
+    const motherTongueMatch = isValueInPreference(profileMotherTongue, userPreferences.motherTongue);
     if (motherTongueMatch) score += 5;
     details.push({
       criteria: "Mother Tongue",
       icon: "🗣",
       points: 5,
       matched: motherTongueMatch,
-      yourPreference: userPreferences.motherTongue,
-      theirValue: profile.personal?.motherTongue || "N/A",
+      yourPreference: userPreferences.motherTongue || "Any",
+      theirValue: profileMotherTongue || "N/A",
     });
 
     // 🔮 Kundli Matching (10 points)
-    const kundliMatch = userPreferences.kundliMatchRequired && profile.kundli?.manglik === "No";
+    const profileManglik = profile.kundli?.manglik || "";
+    let kundliMatch = false;
+    if (userPreferences.kundliMatchRequired) {
+      if (userPreferences.manglikPreference === "both") {
+        kundliMatch = true;
+      } else if (userPreferences.manglikPreference === "yes" && (profileManglik === "Yes" || profileManglik === "true")) {
+        kundliMatch = true;
+      } else if (userPreferences.manglikPreference === "no" && (profileManglik === "No" || profileManglik === "false")) {
+        kundliMatch = true;
+      }
+    } else {
+      kundliMatch = true; // No kundli match required, give points
+    }
     if (kundliMatch) score += 10;
     details.push({
       criteria: "Kundli Matching",
       icon: "🔮",
       points: 10,
       matched: kundliMatch,
-      yourPreference: "Manglik: No",
-      theirValue: `Manglik: ${profile.kundli?.manglik || "N/A"}`,
+      yourPreference: userPreferences.kundliMatchRequired ? `Manglik: ${userPreferences.manglikPreference}` : "Not required",
+      theirValue: `Manglik: ${profileManglik || "N/A"}`,
     });
 
     return details;
@@ -318,100 +487,29 @@ export default function ProfileDetailScreen() {
   const matchPercentage = Math.round((matchDetails.reduce((acc, d) => acc + (d.matched ? d.points : 0), 0) / 100) * 100);
 
   useEffect(() => {
-    // Hardcoded profile data as per user feedback
-    const hardcodedProfile = {
-      id: "test-profile",
-      email: "test2@example.com",
-      mobile: "Not specified",
-      gender: "female",
-      isVerified: false,
-      isActive: true,
-      createdAt: "2024-01-01T00:00:00.000Z",
-      personal: {
-        firstName: "Test",
-        lastName: "User",
-        fullName: "Test User",
-        dateOfBirth: "1990-01-01",
-        age: 34,
-        birthTime: "05:45:00",
-        height: "5'6\"",
-        heightCm: 168,
-        weight: "68.00 kg",
-        weightKg: "68.00",
-        maritalStatus: "Never Married",
-        motherTongue: "Gujarati",
-        aboutMe: "Simple and family oriented. Looking for a genuine partner who values relationships and has a positive outlook towards life.",
-        profileImage: null,
-      },
-      religion: {
-        religion: "Hindu",
-        caste: "Brahmin",
-        subCaste: "",
-        gotra: " Kashyap",
-        manglik: "No",
-      },
-      professional: {
-        occupation: "Software Engineer",
-        annualIncome: "₹10,00,000",
-        workLocation: "Ahmedabad, Gujarat",
-        employer: "Tech Company",
-      },
-      education: [
-        {
-          degree: "M.Tech",
-          college: "IIT Delhi",
-          university: "IIT",
-          yearOfPassing: 2018,
-        },
-      ],
-      addresses: [
-        {
-          type: "permanent",
-          city: "Jaipur",
-          state: "Rajasthan",
-          country: "India",
-          pincode: "302001",
-        },
-      ],
-      family: {
-        fatherName: "Ramesh Kumar",
-        fatherOccupation: "Business",
-        motherName: "Sunita Kumar",
-        motherOccupation: "Housewife",
-        siblings: "1 Brother",
-        familyType: "Nuclear",
-        familyValues: "Traditional",
-        familyStatus: "Middle Class",
-      },
-      lifestyle: {
-        diet: "Vegetarian",
-        smoking: false,
-        drinking: false,
-        hobbies: ["Reading", "Cooking", "Traveling"],
-        interests: ["Music", "Movies", "Yoga"],
-      },
-      kundli: {
-        birthPlace: "Jaipur, Rajasthan",
-        birthTime: "05:45:00",
-        manglik: "No",
-        gotra: "Kashyap",
-        rashi: "Taurus",
-        nakshatra: "Rohini",
-        charan: "2",
-        gan: "Dev",
-        nadi: "Madhya",
-      },
-      partnerPreferences: null,
-      images: [
-        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800",
-        "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800",
-        "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=800",
-        "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800",
-      ],
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        const response = await apiService.getUserProfileByUserId(id as string);
+        
+        if (response.success && response.data) {
+          setProfile(response.data);
+          setRequestStatus(getInitialStatus(response.data));
+        } else {
+          console.error("Failed to fetch profile:", response.message);
+          Alert.alert("Error", "Failed to load profile");
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+        Alert.alert("Error", "Something went wrong while loading profile");
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setProfile(hardcodedProfile);
-    setLoading(false);
+    if (id) {
+      fetchProfile();
+    }
   }, [id]);
 
   const handleLike = () => {
@@ -453,9 +551,15 @@ export default function ProfileDetailScreen() {
   }
 
   // Get profile images for slider
-  const profileImages = profile.images && profile.images.length > 0 
-    ? profile.images 
-    : [profile.personal?.profileImage || "https://via.placeholder.com/400x300"];
+  const profileImages = (profile.personal?.profileImages && profile.personal.profileImages.length > 0)
+    ? profile.personal.profileImages
+    : profile.images && profile.images.length > 0
+      ? profile.images
+      : [profile.personal?.profileImage || "https://via.placeholder.com/400x300"];
+
+  // Convert hobbies and interests to arrays using helper function
+  const hobbies = convertToArray(profile.lifestyle?.hobbies);
+  const interests = convertToArray(profile.lifestyle?.interests);
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
@@ -528,8 +632,8 @@ export default function ProfileDetailScreen() {
               <Text style={styles.statLabel}>Income</Text>
             </View>
             <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{profile.personal?.height || "N/A"}</Text>
+<View style={styles.statItem}>
+              <Text style={styles.statValue}>{profile.personal?.heightCm ? convertCmToFeet(profile.personal.heightCm) : profile.personal?.height || "N/A"}</Text>
               <Text style={styles.statLabel}>Height</Text>
             </View>
           </View>
@@ -620,9 +724,20 @@ export default function ProfileDetailScreen() {
             <>
               <TouchableOpacity
                 style={[styles.actionButton, styles.rejectButton]}
-                onPress={() => {
-                  setRequestStatus("declined");
-                  Alert.alert("Rejected", "You have declined this request");
+                onPress={async () => {
+                  if (!profile) return;
+                  try {
+                    const response = await apiService.rejectInterest(profile.id);
+                    if (response.success) {
+                      setRequestStatus("declined");
+                      Alert.alert("Rejected", `You have declined the request from ${profile.personal?.fullName || "this user"}.`);
+                    } else {
+                      Alert.alert("Error", response.message || "Failed to reject interest. Please try again.");
+                    }
+                  } catch (error) {
+                    console.error("Error rejecting interest:", error);
+                    Alert.alert("Error", "Failed to reject interest. Please check your connection and try again.");
+                  }
                 }}
               >
                 <Text style={styles.actionButtonIcon}>✕</Text>
@@ -803,11 +918,11 @@ export default function ProfileDetailScreen() {
             </View>
           </View>
 
-          {Array.isArray(profile.lifestyle?.hobbies) && profile.lifestyle.hobbies.length > 0 && (
+          {hobbies.length > 0 && (
             <View style={styles.hobbiesSection}>
               <Text style={styles.hobbiesLabel}>Hobbies</Text>
               <View style={styles.hobbiesTags}>
-                {profile.lifestyle.hobbies.map((hobby: string, index: number) => (
+                {hobbies.map((hobby: string, index: number) => (
                   <View key={index} style={styles.hobbyTag}>
                     <Text style={styles.hobbyTagText}>{hobby}</Text>
                   </View>
@@ -816,11 +931,11 @@ export default function ProfileDetailScreen() {
             </View>
           )}
 
-          {Array.isArray(profile.lifestyle?.interests) && profile.lifestyle.interests.length > 0 && (
+          {interests.length > 0 && (
             <View style={styles.hobbiesSection}>
               <Text style={styles.hobbiesLabel}>Interests</Text>
               <View style={styles.hobbiesTags}>
-                {profile.lifestyle.interests.map((interest: string, index: number) => (
+                {interests.map((interest: string, index: number) => (
                   <View key={index} style={styles.interestTag}>
                     <Text style={styles.interestTagText}>{interest}</Text>
                   </View>

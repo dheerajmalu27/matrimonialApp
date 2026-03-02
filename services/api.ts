@@ -52,6 +52,8 @@ interface UserProfile {
   occupation: string;
   bio: string;
   images: string[];
+  profileImages?: string[];
+  profileImage?: string;
   email: string;
   phone: string;
   religion: string;
@@ -65,6 +67,10 @@ interface UserProfile {
 }
 
 interface PotentialMatch {
+  interestId: any;
+  interestIsSender: any;
+  interestStatus: any;
+  motherTongue: any;
   id: string;
   name: string;
   age: number;
@@ -75,6 +81,7 @@ interface PotentialMatch {
   caste: string;
   height: string;
   education: string;
+  profileImages?: string[];
   profileImage: string;
   compatibilityScore: number;
   isVerified: boolean;
@@ -160,6 +167,84 @@ interface ConnectionRequest {
   message: string;
   timestamp: string;
   status: string;
+}
+
+interface MonetizationConfig {
+  currency: string;
+  plans: {
+    free: {
+      planCode: string;
+      displayName: string;
+      billingCycle: string;
+      priceInr: number;
+      durationDays: number;
+      features: {
+        basicMessaging: boolean;
+        limitedSearch: boolean;
+        advancedSearch: boolean;
+        verifiedBadge: boolean;
+        unlimitedInterests: boolean;
+        dailyInterestsLimit: number | null;
+      };
+    };
+    premium: {
+      planCode: string;
+      displayName: string;
+      billingCycle: string;
+      priceInr: number;
+      durationDays: number;
+      features: {
+        basicMessaging: boolean;
+        limitedSearch: boolean;
+        advancedSearch: boolean;
+        verifiedBadge: boolean;
+        unlimitedInterests: boolean;
+        dailyInterestsLimit: number | null;
+      };
+    };
+  };
+}
+
+interface MonetizationStatusResponse {
+  config: MonetizationConfig;
+  user: {
+    activePlan: "free" | "premium";
+    planCode: string;
+    features: MonetizationConfig["plans"]["free"]["features"];
+    subscription: {
+      planCode: string;
+      planName: string;
+      startedAt: string;
+      expiresAt: string;
+      amountInr: number;
+      amountInPaise: number;
+      currency: string;
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+    } | null;
+    usage: {
+      interestsSentToday: number;
+    };
+  };
+}
+
+interface RazorpayOrderResponse {
+  keyId: string;
+  order: {
+    id: string;
+    amount: number;
+    currency: string;
+    receipt: string;
+  };
+  plan: {
+    planCode: string;
+    displayName: string;
+    amountInr: number;
+    amountInPaise: number;
+    currency: string;
+    durationDays: number;
+    features: MonetizationConfig["plans"]["premium"]["features"];
+  };
 }
 
 interface SentRequest {
@@ -270,6 +355,14 @@ interface ReceivedRequestsResponse {
   requests: ReceivedRequest[];
   totalCount: number;
   hasMore: boolean;
+}
+
+interface ShortlistEntry {
+  id: number;
+  userId: number;
+  shortlistedUserId: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface FilterOptions {
@@ -431,22 +524,22 @@ class ApiService {
 
   // User Profile APIs
   async getUserProfile(): Promise<ApiResponse<UserProfile>> {
-    // Check for cached profile first
-    const cachedProfile = await AsyncStorage.getItem("userProfile");
-    if (cachedProfile) {
-      const profile: UserProfile = JSON.parse(cachedProfile);
-      return { success: true, data: profile };
+    // Prefer fresh profile from server; fall back to cache on error or offline
+    try {
+      const response = await this.makeRequest<UserProfile>("/users/me/profile");
+      if (response.success && response.data) {
+        await AsyncStorage.setItem("userProfile", JSON.stringify(response.data));
+      }
+      return response;
+    } catch (err) {
+      // on failure, return cached profile if available
+      const cachedProfile = await AsyncStorage.getItem("userProfile");
+      if (cachedProfile) {
+        const profile: UserProfile = JSON.parse(cachedProfile);
+        return { success: true, data: profile };
+      }
+      throw err;
     }
-
-    // Fetch from API if not cached
-    const response = await this.makeRequest<UserProfile>("/users/me/profile");
-
-    // Cache the profile if successful
-    if (response.success && response.data) {
-      await AsyncStorage.setItem("userProfile", JSON.stringify(response.data));
-    }
-
-    return response;
   }
 
   async updateUserProfile(
@@ -467,6 +560,39 @@ class ApiService {
 
   async getUserProfileById(userId: string): Promise<ApiResponse<UserProfile>> {
     return await this.makeRequest<UserProfile>(`/users/profile/${userId}`);
+  }
+
+  /**
+   * Upload one or more photos to the server for the current user
+   * Returns array of remote URLs and the first url as profileImage
+   */
+  async uploadPhotos(uris: string[]): Promise<ApiResponse<{ urls: string[]; profileImage?: string }>> {
+    const url = `${this.baseURL}/users/me/photos`;
+    const token = await AsyncStorage.getItem("accessToken");
+
+    const form = new FormData();
+    uris.forEach((uri, idx) => {
+      const filename = uri.split('/').pop() || `photo${idx}.jpg`;
+      const match = filename.match(/\.(\w+)$/);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      form.append('photos', {
+        uri,
+        name: filename,
+        type,
+      } as any);
+    });
+
+    const headers: HeadersInit = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    // do not set Content-Type so fetch can add boundary
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+
+    return await this.handleResponse<{ urls: string[]; profileImage?: string }>(response);
   }
 
   // Matching APIs
@@ -678,6 +804,90 @@ class ApiService {
     return await this.makeRequest<{ id: string; name: string }[]>(
       "/master/income-ranges",
     );
+  }
+
+  // Match Details API - Get match details for a specific profile
+  async getMatchDetails(userId: string): Promise<ApiResponse<any>> {
+    return await this.makeRequest<any>(`/matches/details/${userId}`);
+  }
+
+  // Get user profile by user ID (for viewing other user's profiles)
+  async getUserProfileByUserId(userId: string): Promise<ApiResponse<any>> {
+    return await this.makeRequest<any>(`/users/profile/${userId}`);
+  }
+
+  // Interest APIs
+  async sendInterest(receiverId: string): Promise<ApiResponse<any>> {
+    return await this.makeRequest<any>("/interaction/interests/send", {
+      method: "POST",
+      body: JSON.stringify({ receiverId: parseInt(receiverId) }),
+    });
+  }
+
+  async acceptInterest(senderId: string): Promise<ApiResponse<any>> {
+    return await this.makeRequest<any>("/interaction/interests/accept", {
+      method: "POST",
+      body: JSON.stringify({ senderId: parseInt(senderId) }),
+    });
+  }
+
+  async rejectInterest(senderId: string): Promise<ApiResponse<any>> {
+    return await this.makeRequest<any>("/interaction/interests/reject", {
+      method: "POST",
+      body: JSON.stringify({ senderId: parseInt(senderId) }),
+    });
+  }
+
+  async cancelInterest(receiverId: string): Promise<ApiResponse<any>> {
+    return await this.makeRequest<any>("/interaction/interests/cancel", {
+      method: "POST",
+      body: JSON.stringify({ receiverId: parseInt(receiverId) }),
+    });
+  }
+
+  async getShortlists(): Promise<ApiResponse<ShortlistEntry[]>> {
+    const response = await this.makeRequest<any>("/interaction/shortlists");
+    if (Array.isArray(response)) {
+      return {
+        success: true,
+        data: response as ShortlistEntry[],
+      };
+    }
+    return response as ApiResponse<ShortlistEntry[]>;
+  }
+
+  async addToShortlist(userId: string): Promise<ApiResponse<any>> {
+    return await this.makeRequest<any>("/interaction/shortlists", {
+      method: "POST",
+      body: JSON.stringify({ userId: parseInt(userId) }),
+    });
+  }
+
+  async removeFromShortlist(shortlistId: string): Promise<ApiResponse<any>> {
+    return await this.makeRequest<any>(`/interaction/shortlists/${shortlistId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getMonetizationConfig(): Promise<ApiResponse<MonetizationStatusResponse>> {
+    return await this.makeRequest<MonetizationStatusResponse>("/monetization/config");
+  }
+
+  async createPremiumOrder(): Promise<ApiResponse<RazorpayOrderResponse>> {
+    return await this.makeRequest<RazorpayOrderResponse>("/monetization/payments/razorpay/order", {
+      method: "POST",
+    });
+  }
+
+  async verifyPremiumPayment(payload: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }): Promise<ApiResponse<any>> {
+    return await this.makeRequest<any>("/monetization/payments/razorpay/verify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   }
 }
 

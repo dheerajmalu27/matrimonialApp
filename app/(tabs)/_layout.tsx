@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
+  Image,
   Modal,
   Platform,
   StyleSheet,
@@ -32,13 +33,38 @@ export default function TabLayout() {
     fetchUserProfile();
   }, []);
 
+  const getDrawerName = (profile: any): string => {
+    return (
+      profile?.personal?.fullName ||
+      profile?.name ||
+      [profile?.personal?.firstName, profile?.personal?.lastName].filter(Boolean).join(" ") ||
+      "User"
+    );
+  };
+
+  const getDrawerImage = (profile: any): string | null => {
+    return (
+      profile?.personal?.profileImages?.[0] ||
+      profile?.profileImages?.[0] ||
+      profile?.personal?.profileImage ||
+      profile?.profileImage ||
+      profile?.images?.[0] ||
+      null
+    );
+  };
+
   const fetchUserProfile = async () => {
     try {
       const response = await apiService.getUserProfile();
       if (response.success && response.data) {
         setUserProfile({
-          name: response.data.name,
-          image: response.data.images?.[0] || "https://via.placeholder.com/60",
+          name: getDrawerName(response.data),
+          image: getDrawerImage(response.data) || "",
+        });
+      } else {
+        setUserProfile({
+          name: "User",
+          image: "",
         });
       }
     } catch (error) {
@@ -46,7 +72,7 @@ export default function TabLayout() {
       // Fallback to default
       setUserProfile({
         name: "User",
-        image: "https://via.placeholder.com/60",
+        image: "",
       });
     } finally {
       setLoading(false);
@@ -54,6 +80,7 @@ export default function TabLayout() {
   };
 
   const openDrawer = () => {
+    fetchUserProfile();
     setIsDrawerOpen(true);
     Animated.timing(slideAnim, {
       toValue: 0,
@@ -84,15 +111,21 @@ export default function TabLayout() {
         }}
         style={styles.profileHeader}
       >
-        <IconSymbol
-          size={50}
-          name="person.circle.fill"
-          color="#E91E63"
-          style={styles.profileImage}
-        />
+        {userProfile?.image ? (
+          <Image
+            source={{ uri: userProfile.image }}
+            style={styles.profileImage}
+          />
+        ) : (
+          <View style={styles.profileImageFallback}>
+            <Text style={styles.profileImageFallbackText}>
+              {(userProfile?.name || "U").charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>
-            {userProfile?.name || "Loading..."}
+            {loading ? "Loading..." : userProfile?.name || "User"}
           </Text>
           <Text style={styles.viewProfileText}>View profile</Text>
         </View>
@@ -320,6 +353,21 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 15,
+    backgroundColor: "#f1f1f1",
+  },
+  profileImageFallback: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E91E63",
+  },
+  profileImageFallbackText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
   },
   profileInfo: {
     flex: 1,

@@ -122,20 +122,28 @@ export default function HomeScreen() {
         filters,
       );
 
-      if (response.success && response.data) {
+if (response.success && response.data) {
         const newProfiles = response.data.matches.map((match) => ({
           id: match.id,
           name: match.name,
           age: match.age,
           location: match.location || "Location not specified",
           occupation: match.occupation || "Occupation not specified",
-          image: match.profileImage || "https://via.placeholder.com/150",
+          images: match.profileImages || (match.profileImage ? [match.profileImage] : []),
+          image: (match.profileImages && match.profileImages.length > 0)
+            ? match.profileImages[0]
+            : match.profileImage || "https://via.placeholder.com/150",
           bio: match.bio,
           height: match.height,
           religion: match.religion,
           caste: match.caste,
           isVerified: match.isVerified,
           compatibility: match.compatibilityScore,
+          motherTongue: match.motherTongue,
+          // Interest status fields
+          interestStatus: match.interestStatus,
+          interestIsSender: match.interestIsSender,
+          interestId: match.interestId
         }));
 
         if (loadMore) {

@@ -39,7 +39,10 @@ export default function MyCityScreen() {
           age: match.age,
           location: match.location,
           occupation: match.occupation || "Occupation not specified",
-          image: match.profileImage || "https://via.placeholder.com/150",
+          images: match.profileImages || (match.profileImage ? [match.profileImage] : []),
+          image: (match.profileImages && match.profileImages.length > 0)
+            ? match.profileImages[0]
+            : match.profileImage || "https://via.placeholder.com/150",
           bio: match.bio,
           height: match.height,
           religion: match.religion,

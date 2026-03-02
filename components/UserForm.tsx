@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useMemo } from "react";
 import {
   Alert,
   Animated,
@@ -18,115 +18,15 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DROPDOWN_OPTIONS } from "../constants/dropdownOptions";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
-// Dropdown options for matrimonial app-style fields (like Shaadi.com/Tinder)
-export const DROPDOWN_OPTIONS = {
-  occupation: [
-    "Engineer", "Doctor", "Teacher", "Software Developer", "Business Owner",
-    "Manager", "Accountant", "Nurse", "Architect", "Lawyer", "Banker",
-    "Chef", "Designer", "Marketing", "Sales", "HR Professional",
-    "Civil Services", "Defense", "Police", "Consultant", "Writer",
-    "Journalist", "Artist", "Musician", "Actor", "Sports Professional",
-    "Self Employed", "Retired", "Student", "Other"
-  ],
-  income: [
-    "No Income", "Below ₹1 Lakh", "₹1-2 Lakh", "₹2-3 Lakh", "₹3-4 Lakh",
-    "₹4-5 Lakh", "₹5-7 Lakh", "₹7-10 Lakh", "₹10-15 Lakh", 
-    "₹15-20 Lakh", "₹20-25 Lakh", "₹25-50 Lakh", "₹50 Lakh - 1 Crore",
-    "Above 1 Crore"
-  ],
-  religion: [
-    "Hindu", "Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Parsi",
-    "Jewish", "Bahai", "Other"
-  ],
-  caste: [
-    "General", "OBC", "SC", "ST", "Vaishya", "Kshatriya", "Brahmin",
-    "Rajput", "Yadav", "Gujjar", "Jat", "Maheshwari", "Oswal", 
-    "Aggarwal", "Khatri", "Arora", "Sindhi", "Saraswat", "Kumaoni",
-    "Garhwali", "Other"
-  ],
-  height: [
-    "4'0\"", "4'1\"", "4'2\"", "4'3\"", "4'4\"", "4'5\"", "4'6\"", "4'7\"",
-    "4'8\"", "4'9\"", "4'10\"", "4'11\"", "5'0\"", "5'1\"", "5'2\"", 
-    "5'3\"", "5'4\"", "5'5\"", "5'6\"", "5'7\"", "5'8\"", "5'9\"", 
-    "5'10\"", "5'11\"", "6'0\"", "6'1\"", "6'2\"", "6'3\"", "6'4\"",
-    "6'5\"", "6'6\"", "6'7\"", "6'8\""
-  ],
-  education: [
-    "Below 10th", "10th Pass", "12th Pass", "Diploma", "ITI",
-    "Bachelor's Degree", "Master's Degree", "Doctorate/PhD",
-    "Professional Degree (CA/CS/CMA)", "Other"
-  ],
-  siblings: [
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"
-  ],
-  fatherOccupation: [
-    "Engineer", "Doctor", "Teacher", "Business Owner", "Farmer",
-    "Retired Government Employee", "Private Job", "Self Employed",
-    "Advocate", "Chartered Accountant", "Architect", "Manager",
-    "Pilot", "Armed Forces", "Police", "Politician", "Writer",
-    "Consultant", "Driver", "Worker/Laborer", "Not Employed", "Passed Away", "Other"
-  ],
-  motherOccupation: [
-    "Housewife", "Teacher", "Doctor", "Nurse", "Business Owner",
-    "Government Employee", "Private Job", "Self Employed",
-    "Retired Government Employee", "Advocate", "Chartered Accountant",
-    "Manager", "Artist", "Writer", "Consultant", "Driver",
-    "Worker/Laborer", "Other"
-  ],
-  familyType: [
-    "Nuclear", "Joint", "Extended Nuclear", "Other"
-  ],
-  diet: [
-    "Vegetarian", "Non-Vegetarian", "Eggetarian", "Vegan", "Jain", 
-    "Buddhist", "Halal", "Kosher", "Other"
-  ],
-  smoking: [
-    "No", "Yes", "Occasionally", "Trying to Quit"
-  ],
-  drinking: [
-    "No", "Yes", "Occasionally", "Social Drinker", "Trying to Quit"
-  ],
-  manglik: [
-    "No", "Yes", "Don't Know", "Partial"
-  ],
-  rashi: [
-    "Mesh (Aries)", "Vrishabh (Taurus)", "Mithun (Gemini)", "Kark (Cancer)",
-    "Simha (Leo)", "Kanya (Virgo)", "Tula (Libra)", "Vrishchik (Scorpio)",
-    "Dhanu (Sagittarius)", "Makar (Capricorn)", "Kumbh (Aquarius)", "Meen (Pisces)"
-  ],
-  nakshatra: [
-    "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
-    "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", 
-    "Uttara Phalguni", "Hasta", "Chitra", "Swati", "Vishakha", 
-    "Anuradha", "Jyeshtha", "Mula", "Purva Ashadha", "Uttara Ashadha",
-    "Shravana", "Dhanishtha", "Shatabhisha", "Purva Bhadrapada", 
-    "Uttara Bhadrapada", "Revati"
-  ],
-  // Multi-select hobbies and interests (like Shaadi.com/Tinder)
-  hobbies: [
-    "Reading", "Writing", "Cooking", "Traveling", "Photography",
-    "Music", "Dancing", "Singing", "Painting", "Gardening",
-    "Fitness", "Yoga", "Running", "Cycling", "Swimming",
-    "Trekking", "Gaming", "Movies", "TV Shows", "Shopping",
-    "Pets", "Art & Craft", "Fashion", "Technology", "Sports",
-    "Volunteering", "Investing", "Cooking", "Health & Wellness"
-  ],
-  interests: [
-    "Technology", "Sports", "Music", "Movies", "Travel",
-    "Fashion", "Cooking", "Fitness", "Reading", "Writing",
-    "Photography", "Art", "Dance", "Yoga", "Meditation",
-    "Nature", "Adventure", "Gaming", "Business", "Finance",
-    "Politics", "Science", "History", "Spirituality", "Social Work",
-    "Automobiles", "Food & Dining", "Shopping", "Health & Wellness"
-  ]
-};
+// Re-export for backward compatibility
+export { DROPDOWN_OPTIONS };
 
 export interface UserFormData {
   name: string;
-  age: string;
   birthDate: string; // Added birth date field
   location: string;
   occupation: string;
@@ -186,15 +86,6 @@ const validatePhone = (phone: string): string | null => {
   return null;
 };
 
-const validateAge = (age: string): string | null => {
-  if (!age.trim()) return "Age is required";
-  const ageNum = parseInt(age);
-  if (isNaN(ageNum)) return "Please enter a valid age";
-  if (ageNum < 18) return "You must be at least 18 years old";
-  if (ageNum > 100) return "Please enter a valid age (under 100)";
-  return null;
-};
-
 const validateName = (name: string): string | null => {
   if (!name.trim()) return "Full name is required";
   if (name.trim().length < 2) return "Name must be at least 2 characters";
@@ -228,13 +119,32 @@ interface DropdownProps {
   onSelect: (value: string) => void;
   placeholder?: string;
   error?: string;
+  enableSearch?: boolean;
+  searchPlaceholder?: string;
 }
 
-function Dropdown({ label, value, options, onSelect, placeholder = "Select", error }: DropdownProps) {
+function Dropdown({
+  label,
+  value,
+  options,
+  onSelect,
+  placeholder = "Select",
+  error,
+  enableSearch = false,
+  searchPlaceholder = "Search...",
+}: DropdownProps) {
   const [modalVisible, setModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredOptions = useMemo(() => {
+    if (!enableSearch || !searchQuery.trim()) return options;
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return options.filter((option) => option.toLowerCase().includes(normalizedQuery));
+  }, [enableSearch, options, searchQuery]);
 
   const handleSelect = (option: string) => {
     onSelect(option);
+    setSearchQuery("");
     setModalVisible(false);
   };
 
@@ -247,7 +157,10 @@ function Dropdown({ label, value, options, onSelect, placeholder = "Select", err
       
       <TouchableOpacity 
         style={[styles.dropdown, error && styles.inputError]}
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          setSearchQuery("");
+          setModalVisible(true);
+        }}
       >
         <Text style={[styles.dropdownText, !value && styles.dropdownPlaceholder]}>
           {value || placeholder}
@@ -272,12 +185,30 @@ function Dropdown({ label, value, options, onSelect, placeholder = "Select", err
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select {label}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchQuery("");
+                  setModalVisible(false);
+                }}
+              >
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
             </View>
+            {enableSearch && (
+              <View style={styles.modalSearchContainer}>
+                <TextInput
+                  style={styles.modalSearchInput}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder={searchPlaceholder}
+                  placeholderTextColor="#999"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+              </View>
+            )}
             <FlatList
-              data={options}
+              data={filteredOptions}
               keyExtractor={(item) => item}
               renderItem={({ item }) => (
                 <TouchableOpacity 
@@ -291,6 +222,11 @@ function Dropdown({ label, value, options, onSelect, placeholder = "Select", err
                 </TouchableOpacity>
               )}
               showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.emptySearchContainer}>
+                  <Text style={styles.emptySearchText}>No results found</Text>
+                </View>
+              }
             />
           </View>
         </View>
@@ -307,10 +243,28 @@ interface MultiSelectProps {
   onSelect: (values: string[]) => void;
   placeholder?: string;
   error?: string;
+  enableSearch?: boolean;
+  searchPlaceholder?: string;
 }
 
-function MultiSelectDropdown({ label, values, options, onSelect, placeholder = "Select multiple", error }: MultiSelectProps) {
+function MultiSelectDropdown({
+  label,
+  values,
+  options,
+  onSelect,
+  placeholder = "Select multiple",
+  error,
+  enableSearch = false,
+  searchPlaceholder = "Search...",
+}: MultiSelectProps) {
   const [modalVisible, setModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredOptions = useMemo(() => {
+    if (!enableSearch || !searchQuery.trim()) return options;
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return options.filter((option) => option.toLowerCase().includes(normalizedQuery));
+  }, [enableSearch, options, searchQuery]);
 
   const handleToggle = (option: string) => {
     if (values.includes(option)) {
@@ -321,6 +275,7 @@ function MultiSelectDropdown({ label, values, options, onSelect, placeholder = "
   };
 
   const handleDone = () => {
+    setSearchQuery("");
     setModalVisible(false);
   };
 
@@ -339,7 +294,10 @@ function MultiSelectDropdown({ label, values, options, onSelect, placeholder = "
       
       <TouchableOpacity 
         style={[styles.dropdown, error && styles.inputError]}
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          setSearchQuery("");
+          setModalVisible(true);
+        }}
       >
         <Text style={[styles.dropdownText, values.length === 0 && styles.dropdownPlaceholder]}>
           {displayText}
@@ -379,15 +337,33 @@ function MultiSelectDropdown({ label, values, options, onSelect, placeholder = "
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select {label}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchQuery("");
+                  setModalVisible(false);
+                }}
+              >
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
             </View>
+            {enableSearch && (
+              <View style={styles.modalSearchContainer}>
+                <TextInput
+                  style={styles.modalSearchInput}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder={searchPlaceholder}
+                  placeholderTextColor="#999"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+              </View>
+            )}
             <View style={styles.multiSelectInfo}>
               <Text style={styles.multiSelectCount}>{values.length} selected</Text>
             </View>
             <FlatList
-              data={options}
+              data={filteredOptions}
               keyExtractor={(item) => item}
               renderItem={({ item }) => {
                 const isSelected = values.includes(item);
@@ -408,6 +384,11 @@ function MultiSelectDropdown({ label, values, options, onSelect, placeholder = "
                 );
               }}
               showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.emptySearchContainer}>
+                  <Text style={styles.emptySearchText}>No results found</Text>
+                </View>
+              }
             />
             <TouchableOpacity style={styles.doneButton} onPress={handleDone}>
               <Text style={styles.doneButtonText}>Done</Text>
@@ -564,10 +545,30 @@ export function UserForm({
   isRegistration = false,
   onSignIn,
 }: UserFormProps) {
+  const searchableDropdownFields: Array<keyof UserFormData> = [
+    "location",
+    "birthPlace",
+    "occupation",
+    "education",
+    "religion",
+    "caste",
+    "fatherOccupation",
+    "motherOccupation",
+    "rashi",
+    "nakshatra",
+  ];
+
+  const inputAutoCompleteMap: Partial<Record<keyof UserFormData, "name" | "email" | "tel" | "password">> = {
+    name: "name",
+    email: "email",
+    phone: "tel",
+    password: "password",
+    confirmPassword: "password",
+  };
+
   const insets = useSafeAreaInsets();
   const [formData, setFormData] = useState<UserFormData>({
     name: initialData.name || "",
-    age: initialData.age || "",
     birthDate: initialData.birthDate || "",
     location: initialData.location || "",
     occupation: initialData.occupation || "",
@@ -605,14 +606,13 @@ export function UserForm({
   const [currentStep, setCurrentStep] = useState(0);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
-  const totalSteps = 6;
+  const totalSteps = 5;
 
   const validateField = useCallback((field: keyof UserFormData, value: string): string | null => {
     switch (field) {
       case "name": return validateName(value);
       case "email": return validateEmail(value);
       case "phone": return validatePhone(value);
-      case "age": return validateAge(value);
       case "birthDate": return validateRequired(value, "Birth date");
       case "password": return validatePassword(value);
       case "confirmPassword": return validateConfirmPassword(formData.password || "", value);
@@ -680,12 +680,20 @@ export function UserForm({
 
     if (step === 0) {
       const fieldsToValidate: (keyof UserFormData)[] = [
-        "name", "email", "phone", "birthDate", "age", "location", "occupation", "bio"
+        "name", "email", "phone", "birthDate", "location", "occupation", "bio"
       ];
       fieldsToValidate.forEach((field) => {
         const error = validateField(field, formData[field] as string);
         if (error) { newErrors[field] = error; isValid = false; }
       });
+
+      if (isRegistration) {
+        const passwordError = validatePassword(formData.password || "");
+        if (passwordError) { newErrors.password = passwordError; isValid = false; }
+
+        const confirmError = validateConfirmPassword(formData.password || "", formData.confirmPassword || "");
+        if (confirmError) { newErrors.confirmPassword = confirmError; isValid = false; }
+      }
     } else if (step === 1) {
       const fieldsToValidate: (keyof UserFormData)[] = [
         "religion", "caste", "height", "education", "income"
@@ -710,11 +718,6 @@ export function UserForm({
         const error = validateField(field, formData[field] as string);
         if (error) { newErrors[field] = error; isValid = false; }
       });
-    } else if (step === 5 && isRegistration) {
-      const passwordError = validatePassword(formData.password || "");
-      if (passwordError) { newErrors.password = passwordError; isValid = false; }
-      const confirmError = validateConfirmPassword(formData.password || "", formData.confirmPassword || "");
-      if (confirmError) { newErrors.confirmPassword = confirmError; isValid = false; }
     }
 
     setErrors(newErrors);
@@ -754,9 +757,9 @@ export function UserForm({
     let isValid = true;
 
     const fieldsToValidate: (keyof UserFormData)[] = isRegistration
-      ? ["name", "email", "phone", "birthDate", "age", "location", "occupation", "bio", 
+      ? ["name", "email", "phone", "birthDate", "location", "occupation", "bio", 
           "religion", "caste", "height", "education", "income", "password", "confirmPassword"]
-      : ["name", "email", "phone", "birthDate", "age", "location", "occupation", "bio"];
+      : ["name", "email", "phone", "birthDate", "location", "occupation", "bio"];
 
     fieldsToValidate.forEach((field) => {
       const error = validateField(field, formData[field] as string);
@@ -785,6 +788,13 @@ export function UserForm({
     secureTextEntry = false,
   ) => {
     const hasError = !!errors[field];
+    const autoCompleteValue = inputAutoCompleteMap[field];
+    const autoCapitalizeMode =
+      field === "email" || field === "password" || field === "confirmPassword" || field === "phone"
+        ? "none"
+        : multiline
+          ? "sentences"
+          : "words";
     
     return (
       <View style={styles.inputGroup}>
@@ -806,8 +816,9 @@ export function UserForm({
           multiline={multiline}
           secureTextEntry={secureTextEntry}
           numberOfLines={multiline ? 3 : 1}
-          autoCapitalize="none"
+          autoCapitalize={autoCapitalizeMode}
           autoCorrect={false}
+          autoComplete={autoCompleteValue}
         />
         {hasError && (
           <View style={styles.errorContainer}>
@@ -820,6 +831,8 @@ export function UserForm({
   };
 
   const renderDropdown = (field: keyof UserFormData, label: string, options: string[]) => {
+    const shouldEnableSearch = searchableDropdownFields.includes(field) || options.length > 15;
+
     return (
       <Dropdown
         label={label}
@@ -828,12 +841,20 @@ export function UserForm({
         onSelect={(value) => updateField(field, value)}
         placeholder={`Select ${label}`}
         error={errors[field]}
+        enableSearch={shouldEnableSearch}
+        searchPlaceholder={`Search ${label}`}
       />
     );
   };
 
   const renderMultiSelect = (field: "hobbies" | "interests", label: string, options: string[]) => {
-    const currentValues = formData[field] ? (formData[field] as string).split(',').filter(v => v) : [];
+    const currentValues = formData[field]
+      ? (formData[field] as string)
+          .split(',')
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0)
+      : [];
+
     return (
       <MultiSelectDropdown
         label={label}
@@ -842,6 +863,8 @@ export function UserForm({
         onSelect={(values) => updateField(field, values.join(','))}
         placeholder={`Select ${label}`}
         error={errors[field]}
+        enableSearch={options.length > 15}
+        searchPlaceholder={`Search ${label}`}
       />
     );
   };
@@ -853,16 +876,6 @@ export function UserForm({
         value={formData[field] as string}
         onSelect={(value) => {
           updateField(field, value);
-          // Calculate age from birth date
-          const parts = value.split('/');
-          if (parts.length === 3) {
-            const birthYear = parseInt(parts[0]);
-            const currentYear = new Date().getFullYear();
-            const age = currentYear - birthYear;
-            if (age >= 18 && age <= 100) {
-              updateField("age", age.toString());
-            }
-          }
         }}
         placeholder="Select your birth date"
         error={errors[field]}
@@ -886,9 +899,10 @@ export function UserForm({
             {renderInput("name", "Full Name", "Enter your full name")}
             {renderInput("email", "Email Address", "your@email.com", "email-address")}
             {renderInput("phone", "Mobile Number", "Enter 10-digit mobile number", "phone-pad")}
+            {isRegistration && renderInput("password", "Password", "Create a strong password", "default", false, true)}
+            {isRegistration && renderInput("confirmPassword", "Confirm Password", "Re-enter your password", "default", false, true)}
             {renderDatePicker("birthDate", "Birth Date")}
-            {renderInput("age", "Age", "Enter your age (18+)", "numeric")}
-            {renderInput("location", "Location", "City, State, Country")}
+            {renderDropdown("location", "Location", DROPDOWN_OPTIONS.location)}
             {renderDropdown("occupation", "Occupation", DROPDOWN_OPTIONS.occupation)}
             {renderInput("bio", "About Me", "Tell others about yourself...", "default", true)}
 
@@ -969,28 +983,11 @@ export function UserForm({
             <Text style={styles.stepTitle}>🔮 Kundli Details</Text>
             <Text style={styles.stepSubtitle}>Birth details for compatibility (Optional)</Text>
 
-            {renderInput("birthPlace", "Birth Place", "City, State, Country")}
+            {renderDropdown("birthPlace", "Birth Place", DROPDOWN_OPTIONS.location)}
             {renderInput("birthTime", "Birth Time", "e.g., 10:30 AM")}
             {renderDropdown("manglik", "Manglik Status", DROPDOWN_OPTIONS.manglik)}
             {renderDropdown("rashi", "Rashi (Moon Sign)", DROPDOWN_OPTIONS.rashi)}
             {renderDropdown("nakshatra", "Nakshatra", DROPDOWN_OPTIONS.nakshatra)}
-          </View>
-        );
-      case 5:
-        return (
-          <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>🔐 Security</Text>
-            <Text style={styles.stepSubtitle}>Create a secure password</Text>
-
-            {renderInput("password", "Password", "Create a strong password", "default", false, true)}
-            {renderInput("confirmPassword", "Confirm Password", "Re-enter your password", "default", false, true)}
-            
-            <View style={styles.passwordHint}>
-              <Text style={styles.passwordHintTitle}>Password Tips:</Text>
-              <Text style={styles.passwordHintText}>• At least 8 characters</Text>
-              <Text style={styles.passwordHintText}>• Include uppercase & lowercase letters</Text>
-              <Text style={styles.passwordHintText}>• Include numbers and symbols</Text>
-            </View>
           </View>
         );
       default:
@@ -1005,7 +1002,6 @@ export function UserForm({
       { num: 3, title: "Family" },
       { num: 4, title: "Lifestyle" },
       { num: 5, title: "Kundli" },
-      { num: 6, title: "Security" },
     ];
 
     return (
@@ -1070,7 +1066,7 @@ export function UserForm({
         <Animated.View
           style={[styles.sliderContainer, { transform: [{ translateX: slideAnim }] }]}
         >
-          {[0, 1, 2, 3, 4, 5].map((step) => (
+          {[0, 1, 2, 3, 4].map((step) => (
             <View key={step} style={styles.stepWrapper}>
               {renderStep(step)}
             </View>
@@ -1190,6 +1186,30 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 18, fontWeight: "bold", color: "#E91E63" },
   modalClose: { fontSize: 20, color: "#666", padding: 5 },
+  modalSearchContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  modalSearchInput: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === "ios" ? 12 : 10,
+    fontSize: 15,
+    color: "#333",
+    backgroundColor: "#fff",
+  },
+  emptySearchContainer: {
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+  emptySearchText: {
+    fontSize: 14,
+    color: "#666",
+  },
   dropdownItem: {
     paddingVertical: 16,
     paddingHorizontal: 20,

@@ -11,8 +11,8 @@ interface MatchDetail {
   theirValue: string;
 }
 
-import { Link } from "expo-router";
-import React, { useState } from "react";
+import { Link, router } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -22,8 +22,11 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedText } from "./themed-text";
+import { apiService } from "../services/api";
 
 interface Profile {
   id: string;
@@ -33,8 +36,7 @@ interface Profile {
   occupation: string;
   image: string;
   bio: string;
-  height?: string;
-  heightCm?: number;
+  height?: number;
   religion?: string;
   caste?: string;
   isVerified?: boolean;
@@ -45,7 +47,17 @@ interface Profile {
   income?: string;
   images?: string[];
   motherTongue?: string;
-  // Request status from backend
+  // New fields from enhanced API
+  distance?: string;
+  mutualInterests?: number[];
+  profileViews?: number;
+  familyType?: string;
+  profileCompletePercentage?: number;
+  // Interest status from backend
+  interestStatus?: string | null;
+  interestIsSender?: boolean | null;
+  interestId?: string | null;
+  // Legacy request status
   requestStatus?: RequestStatus;
 }
 
@@ -55,19 +67,37 @@ interface ProfileCardProps {
   compact?: boolean;
 }
 
-// User's preferences (dummy data - in real app would come from user's profile)
-const userPreferences = {
-  minAge: 25,
-  maxAge: 35,
-  minHeightCm: 150,
-  maxHeightCm: 180,
-  religion: "Hindu",
-  caste: "Brahmin",
-  education: "Engineering",
-  city: "Jaipur",
-  state: "Rajasthan",
-  motherTongue: "Gujarati",
-  kundliMatchRequired: true,
+interface PremiumPlanInfo {
+  displayName: string;
+  amountInr: number;
+  features: {
+    unlimitedInterests: boolean;
+    verifiedBadge: boolean;
+    advancedSearch: boolean;
+    basicMessaging: boolean;
+  };
+}
+
+// Helper function to check if a value exists in a comma-separated preference string
+const isValueInPreference = (value: string, preference: string): boolean => {
+  if (!value || !preference) return false;
+  const preferenceArray = preference.split(",").map((p) => p.trim().toLowerCase());
+  return preferenceArray.some((p) => value.toLowerCase().includes(p));
+};
+
+// Helper function to convert height from CM to feet/inches format
+const convertCmToFeet = (height: number): string => {
+  if (!height || height <= 0) return "";
+  
+  // Convert cm to inches (1 inch = 2.54 cm)
+  const totalInches = height / 2.54;
+  
+  // Calculate feet and remaining inches
+  const feet = Math.floor(totalInches / 12);
+  const inches = Math.round(totalInches % 12);
+  
+  // Return formatted string (e.g., "5' 6\"")
+  return `${feet}' ${inches}"`;
 };
 
 export default function ProfileCard({
@@ -75,16 +105,211 @@ export default function ProfileCard({
   showActions = true,
   compact = false,
 }: ProfileCardProps) {
-  // Local state to manage request status (in real app, this would come from backend)
-  const [requestStatus, setRequestStatus] = useState<RequestStatus>(
-    profile.requestStatus || "none"
-  );
+  // Determine request status from backend interestStatus (props) or fallback to local state
+  // Backend interestStatus: 'pending', 'accepted', 'declined', null
+  // Frontend RequestStatus: 'sent', 'received', 'accepted', 'declined', 'none'
+  
+const getInitialStatus = (): RequestStatus => {
+    if (profile.interestStatus === 'sent') {
+      return profile.interestIsSender ? 'sent' : 'received';
+    }
+    if (profile.interestStatus === 'pending') {
+      return profile.interestIsSender ? 'sent' : 'received';
+    }
+    if (profile.interestStatus === 'accepted') return 'accepted';
+    if (profile.interestStatus === 'declined') return 'declined';
+    return profile.requestStatus || "none";
+  };
+
+  const [requestStatus, setRequestStatus] = useState<RequestStatus>(getInitialStatus());
   const [showMatchDetails, setShowMatchDetails] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isShortlisted, setIsShortlisted] = useState(false);
+  const [shortlistEntryId, setShortlistEntryId] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [premiumPlan, setPremiumPlan] = useState<PremiumPlanInfo>({
+    displayName: "Premium",
+    amountInr: 1200,
+    features: {
+      unlimitedInterests: true,
+      verifiedBadge: true,
+      advancedSearch: true,
+      basicMessaging: true,
+    },
+  });
+
+// Default preferences (used as fallback when no user preferences are found)
+  const defaultPreferences = {
+    minAge: 25,
+    maxAge: 35,
+    minHeightCm: 150,
+    maxHeightCm: 180,
+    religion: "",
+    caste: "",
+    education: "",
+    occupation: "",
+    location: "",
+    incomeRange: "",
+    motherTongue: "",
+    kundliMatchRequired: false,
+    manglikPreference: "both",
+  };
+
+// User's preferences - loaded from localStorage (initialized with defaults to avoid null errors)
+  const [userPreferences, setUserPreferences] = useState<any>(defaultPreferences);
+
+  // Load user preferences from localStorage
+  useEffect(() => {
+    const loadUserPreferences = async () => {
+      try {
+        const userProfileStr = await AsyncStorage.getItem("userProfile");
+        
+        if (userProfileStr) {
+          const userProfile = JSON.parse(userProfileStr);
+         
+          
+          // Check for partnerPreference property
+          if (userProfile.partnerPreference && userProfile.partnerPreference.minAge !== undefined) {
+          await  setUserPreferences(userProfile.partnerPreference);
+            console.log("Successfully loaded partnerPreference:", JSON.stringify(userProfile.partnerPreference));
+          } else {
+            console.log("No valid partnerPreference found, using defaults");
+          }
+        } else {
+          console.log("No userProfile found in localStorage, using defaults");
+        }
+      } catch (error) {
+        console.error("Error loading user preferences:", error);
+      }
+    };
+    
+    loadUserPreferences();
+  }, []);
+
+  useEffect(() => {
+    const loadShortlistStatus = async () => {
+      try {
+        const shortlistResponse = await apiService.getShortlists();
+        const shortlistItems = shortlistResponse.data || [];
+        const currentEntry = shortlistItems.find(
+          (item: any) => String(item.shortlistedUserId) === String(profile.id)
+        );
+
+        if (currentEntry) {
+          setIsShortlisted(true);
+          setShortlistEntryId(String(currentEntry.id));
+        } else {
+          setIsShortlisted(false);
+          setShortlistEntryId(null);
+        }
+      } catch (error) {
+        console.error("Error loading shortlist status:", error);
+      }
+    };
+
+    if (profile?.id) {
+      loadShortlistStatus();
+    }
+  }, [profile?.id]);
+
+  const openUpgradeModal = async () => {
+    setShowUpgradeModal(true);
+    try {
+      const response = await apiService.getMonetizationConfig();
+      if (response.success && response.data?.config?.plans?.premium) {
+        const premium = response.data.config.plans.premium;
+        setPremiumPlan({
+          displayName: premium.displayName || "Premium",
+          amountInr: premium.priceInr || 1200,
+          features: {
+            unlimitedInterests: Boolean(premium.features?.unlimitedInterests),
+            verifiedBadge: Boolean(premium.features?.verifiedBadge),
+            advancedSearch: Boolean(premium.features?.advancedSearch),
+            basicMessaging: Boolean(premium.features?.basicMessaging),
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch premium plan:", error);
+    }
+  };
+
+  const handlePurchasePremium = async () => {
+    try {
+      setUpgradeLoading(true);
+
+      const orderResponse = await apiService.createPremiumOrder();
+      if (!orderResponse.success || !orderResponse.data) {
+        Alert.alert("Payment Error", orderResponse.message || "Unable to create payment order.");
+        return;
+      }
+
+      const { keyId, order, plan } = orderResponse.data;
+
+      let userName = "Matrimonial User";
+      try {
+        const userProfileStr = await AsyncStorage.getItem("userProfile");
+        if (userProfileStr) {
+          const parsed = JSON.parse(userProfileStr);
+          userName = parsed?.personal?.fullName || parsed?.name || userName;
+        }
+      } catch (e) {
+        console.error("Failed to read user profile for prefill:", e);
+      }
+
+      let RazorpayCheckout: any = null;
+      try {
+        const razorpayModule = await import("react-native-razorpay");
+        RazorpayCheckout = razorpayModule.default;
+      } catch (importError) {
+        Alert.alert(
+          "Razorpay SDK Missing",
+          "Install and configure react-native-razorpay in your app build to complete in-app payment.",
+        );
+        return;
+      }
+
+      const paymentResult = await RazorpayCheckout.open({
+        key: keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Matrimonial Premium",
+        description: `${plan.displayName} Plan`,
+        order_id: order.id,
+        prefill: {
+          name: userName,
+        },
+        theme: {
+          color: "#E91E63",
+        },
+      });
+
+      const verifyResponse = await apiService.verifyPremiumPayment({
+        razorpay_order_id: paymentResult.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature,
+      });
+
+      if (verifyResponse.success) {
+        setShowUpgradeModal(false);
+        Alert.alert("Payment Successful", "Premium plan activated successfully.");
+      } else {
+        Alert.alert("Verification Failed", verifyResponse.message || "Payment verification failed.");
+      }
+    } catch (error: any) {
+      console.error("Premium purchase error:", error);
+      const message = error?.description || error?.message || "Payment cancelled or failed.";
+      Alert.alert("Payment Failed", message);
+    } finally {
+      setUpgradeLoading(false);
+    }
+  };
 
   // Calculate match details based on the provided logic
   const calculateMatchDetails = (): MatchDetail[] => {
     const details: MatchDetail[] = [];
-
+   
     // 🎂 Age (25 points)
     const ageMatch = profile.age >= userPreferences.minAge && profile.age <= userPreferences.maxAge;
     details.push({
@@ -97,8 +322,8 @@ export default function ProfileCard({
     });
 
     // 📏 Height (15 points)
-    const heightMatch = profile.heightCm 
-      ? profile.heightCm >= userPreferences.minHeightCm && profile.heightCm <= userPreferences.maxHeightCm
+    const heightMatch = profile.height 
+      ? profile.height >= userPreferences.minHeightCm && profile.height <= userPreferences.maxHeightCm
       : false;
     details.push({
       criteria: "Height",
@@ -106,76 +331,95 @@ export default function ProfileCard({
       points: 15,
       matched: heightMatch,
       yourPreference: `${userPreferences.minHeightCm} - ${userPreferences.maxHeightCm} cm`,
-      theirValue: profile.heightCm ? `${profile.heightCm} cm` : "N/A",
+      theirValue: profile.height ? `${profile.height} cm` : "N/A",
     });
 
-    // 🛕 Religion & Caste (20 points)
-    const religionMatch = profile.religion === userPreferences.religion;
-    const casteMatch = profile.caste === userPreferences.caste;
+    // 🛕 Religion & Caste (20 points) - Multi-value support
+    const religionMatch = isValueInPreference(profile.religion || "", userPreferences.religion);
+    const casteMatch = isValueInPreference(profile.caste || "", userPreferences.caste);
     const religionCasteMatch = religionMatch && casteMatch;
     details.push({
       criteria: "Religion & Caste",
       icon: "🛕",
       points: 20,
       matched: religionCasteMatch,
-      yourPreference: `${userPreferences.religion}, ${userPreferences.caste}`,
+      yourPreference: userPreferences.religion || "Any",
       theirValue: `${profile.religion || "N/A"}, ${profile.caste || "N/A"}`,
     });
 
-    // 🎓 Education (15 points)
-    const educationMatch = profile.education 
-      ? profile.education.toLowerCase().includes(userPreferences.education.toLowerCase())
-      : false;
+    // 🎓 Education (15 points) - Multi-value support
+    const educationMatch = isValueInPreference(profile.education || "", userPreferences.education);
     details.push({
       criteria: "Education",
       icon: "🎓",
       points: 15,
       matched: educationMatch,
-      yourPreference: userPreferences.education,
+      yourPreference: userPreferences.education || "Any",
       theirValue: profile.education || "N/A",
     });
 
-    // 📍 Location (10 points)
-    const locationParts = profile.location.split(",");
-    const cityMatch = locationParts[0]?.trim() === userPreferences.city;
-    const stateMatch = locationParts[1]?.trim() === userPreferences.state;
-    const locationMatch = cityMatch || stateMatch;
+    // 💼 Occupation (10 points) - Multi-value support
+    const occupationMatch = isValueInPreference(profile.occupation || "", userPreferences.occupation);
+    details.push({
+      criteria: "Occupation",
+      icon: "💼",
+      points: 10,
+      matched: occupationMatch,
+      yourPreference: userPreferences.occupation || "Any",
+      theirValue: profile.occupation || "N/A",
+    });
+
+    // 📍 Location (10 points) - Multi-value support
+    const locationMatch = isValueInPreference(profile.location || "", userPreferences.location);
     details.push({
       criteria: "Location",
       icon: "📍",
       points: 10,
       matched: locationMatch,
-      yourPreference: `${userPreferences.city}, ${userPreferences.state}`,
-      theirValue: profile.location,
+      yourPreference: userPreferences.location || "Any",
+      theirValue: profile.location || "Not specified",
     });
 
-    // 🗣 Mother Tongue (5 points)
-    const motherTongueMatch = profile.motherTongue === userPreferences.motherTongue;
+    // 💰 Income (5 points) - Multi-value support
+    const incomeMatch = isValueInPreference(profile.income || "", userPreferences.incomeRange);
+    details.push({
+      criteria: "Income Range",
+      icon: "💰",
+      points: 5,
+      matched: incomeMatch,
+      yourPreference: userPreferences.incomeRange || "Any",
+      theirValue: profile.income || "N/A",
+    });
+
+    // 🗣 Mother Tongue (5 points) - Multi-value support
+    
+    const motherTongueMatch = isValueInPreference(profile.motherTongue || "", userPreferences.motherTongue);
+   
     details.push({
       criteria: "Mother Tongue",
       icon: "🗣",
       points: 5,
       matched: motherTongueMatch,
-      yourPreference: userPreferences.motherTongue,
+      yourPreference: userPreferences.motherTongue || "Any",
       theirValue: profile.motherTongue || "N/A",
     });
 
-    // 🔮 Kundli Matching (10 points) - assume non-manglik for demo
+    // 🔮 Kundli Matching (10 points)
     const kundliMatch = userPreferences.kundliMatchRequired;
     details.push({
       criteria: "Kundli Matching",
       icon: "🔮",
       points: 10,
       matched: kundliMatch,
-      yourPreference: "Manglik: No",
-      theirValue: "Manglik: No (assumed)",
+      yourPreference: userPreferences.kundliMatchRequired ? `Manglik: ${userPreferences.manglikPreference}` : "Not required",
+      theirValue: "Kundli match",
     });
 
     return details;
   };
 
   const matchDetails = calculateMatchDetails();
-  const matchPercentage = profile.compatibility || Math.round(
+  const matchPercentage =  Math.round(
     (matchDetails.reduce((acc, d) => acc + (d.matched ? d.points : 0), 0) / 100) * 100
   );
 
@@ -191,9 +435,34 @@ export default function ProfileCard({
         },
         {
           text: "Send",
-          onPress: () => {
-            setRequestStatus("sent");
-            Alert.alert("Interest Sent! ✨", `Your interest has been sent to ${profile.name}. They will be notified.`);
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await apiService.sendInterest(profile.id);
+              
+              if (response.success) {
+                setRequestStatus("sent");
+                Alert.alert("Interest Sent! ✨", `Your interest has been sent to ${profile.name}. They will be notified.`);
+              } else {
+                Alert.alert("Error", response.message || "Failed to send interest. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error sending interest:", error);
+              const message = error instanceof Error ? error.message : "";
+              const normalizedMessage = message.toLowerCase();
+              const isLimitError =
+                normalizedMessage.includes("limit") ||
+                normalizedMessage.includes("premium") ||
+                normalizedMessage.includes("daily interests");
+
+              if (isLimitError) {
+                openUpgradeModal();
+              } else {
+                Alert.alert("Error", "Failed to send interest. Please check your connection and try again.");
+              }
+            } finally {
+              setLoading(false);
+            }
           },
         },
       ]
@@ -213,9 +482,23 @@ export default function ProfileCard({
         {
           text: "Yes, Cancel",
           style: "destructive",
-          onPress: () => {
-            setRequestStatus("none");
-            Alert.alert("Request Cancelled", "Your interest request has been cancelled.");
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await apiService.cancelInterest(profile.id);
+              
+              if (response.success) {
+                setRequestStatus("none");
+                Alert.alert("Request Cancelled", "Your interest request has been cancelled.");
+              } else {
+                Alert.alert("Error", response.message || "Failed to cancel interest. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error canceling interest:", error);
+              Alert.alert("Error", "Failed to cancel interest. Please check your connection and try again.");
+            } finally {
+              setLoading(false);
+            }
           },
         },
       ]
@@ -231,16 +514,44 @@ export default function ProfileCard({
         {
           text: "Reject",
           style: "destructive",
-          onPress: () => {
-            setRequestStatus("declined");
-            Alert.alert("Request Declined", `You have declined the interest from ${profile.name}.`);
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await apiService.rejectInterest(profile.id);
+              
+              if (response.success) {
+                setRequestStatus("declined");
+                Alert.alert("Request Declined", `You have declined the interest from ${profile.name}.`);
+              } else {
+                Alert.alert("Error", response.message || "Failed to reject interest. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error rejecting interest:", error);
+              Alert.alert("Error", "Failed to reject interest. Please check your connection and try again.");
+            } finally {
+              setLoading(false);
+            }
           },
         },
         {
           text: "Accept",
-          onPress: () => {
-            setRequestStatus("accepted");
-            Alert.alert("Request Accepted! 🎉", `You and ${profile.name} are now connected! You can now message each other.`);
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await apiService.acceptInterest(profile.id);
+              
+              if (response.success) {
+                setRequestStatus("accepted");
+                Alert.alert("Request Accepted! 🎉", `You and ${profile.name} are now connected! You can now message each other.`);
+              } else {
+                Alert.alert("Error", response.message || "Failed to accept interest. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error accepting interest:", error);
+              Alert.alert("Error", "Failed to accept interest. Please check your connection and try again.");
+            } finally {
+              setLoading(false);
+            }
           },
         },
       ]
@@ -254,7 +565,75 @@ export default function ProfileCard({
 
   // Handle shortlist
   const handleShortlist = () => {
-    Alert.alert("Shortlisted! ⭐", `${profile.name} has been short-listed.`);
+    if (!profile?.id) return;
+
+    if (isShortlisted && shortlistEntryId) {
+      Alert.alert(
+        "Remove Shortlist",
+        `Remove ${profile.name} from your shortlist?`,
+        [
+          { text: "No", style: "cancel" },
+          {
+            text: "Yes",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                setLoading(true);
+                const response = await apiService.removeFromShortlist(shortlistEntryId);
+                if (response.success) {
+                  setIsShortlisted(false);
+                  setShortlistEntryId(null);
+                  Alert.alert("Removed", `${profile.name} removed from shortlist.`);
+                } else {
+                  Alert.alert("Error", response.message || "Failed to remove from shortlist. Please try again.");
+                }
+              } catch (error) {
+                console.error("Error removing shortlist:", error);
+                Alert.alert("Error", "Failed to remove from shortlist. Please check your connection and try again.");
+              } finally {
+                setLoading(false);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Shortlist ⭐",
+      `Add ${profile.name} to your shortlist?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Add",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await apiService.addToShortlist(profile.id);
+              if (response.success) {
+                const shortlistResponse = await apiService.getShortlists();
+                const shortlistItems = shortlistResponse.data || [];
+                const currentEntry = shortlistItems.find(
+                  (item: any) => String(item.shortlistedUserId) === String(profile.id)
+                );
+
+                setIsShortlisted(true);
+                setShortlistEntryId(currentEntry ? String(currentEntry.id) : null);
+                Alert.alert("Shortlisted! ⭐", `${profile.name} has been short-listed.`);
+              } else {
+                Alert.alert("Error", response.message || "Failed to shortlist profile. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error adding shortlist:", error);
+              Alert.alert("Error", "Failed to shortlist profile. Please check your connection and try again.");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Calculate image count for indicator
@@ -320,6 +699,11 @@ export default function ProfileCard({
               <ThemedText style={styles.location}>
                 {profile.location}
               </ThemedText>
+              {profile.distance && (
+                <View style={styles.distanceTag}>
+                  <Text style={styles.distanceTagText}>{profile.distance}</Text>
+                </View>
+              )}
               {profile.isOnline && (
                 <View style={styles.onlineTag}>
                   <Text style={styles.onlineTagText}>Active Now</Text>
@@ -327,11 +711,11 @@ export default function ProfileCard({
               )}
             </View>
 
-            {/* Tags for Religion, Caste, Height */}
+{/* Tags for Religion, Caste, Height */}
             <View style={styles.tagsRow}>
-              {profile.height && (
+              {(profile.height || profile.height) && (
                 <View style={styles.heightTag}>
-                  <Text style={styles.heightTagText}>📏 {profile.height}</Text>
+                  <Text style={styles.heightTagText}>📏 {profile.height ? convertCmToFeet(profile.height) : profile.height}</Text>
                 </View>
               )}
               {profile.religion && (
@@ -453,9 +837,23 @@ export default function ProfileCard({
               {/* Reject Button */}
               <TouchableOpacity
                 style={styles.rejectButton}
-                onPress={() => {
-                  setRequestStatus("declined");
-                  Alert.alert("Rejected", `You have declined the request from ${profile.name}.`);
+                onPress={async () => {
+                  try {
+                    setLoading(true);
+                    const response = await apiService.rejectInterest(profile.id);
+                    
+                    if (response.success) {
+                      setRequestStatus("declined");
+                      Alert.alert("Rejected", `You have declined the request from ${profile.name}.`);
+                    } else {
+                      Alert.alert("Error", response.message || "Failed to reject interest. Please try again.");
+                    }
+                  } catch (error) {
+                    console.error("Error rejecting interest:", error);
+                    Alert.alert("Error", "Failed to reject interest. Please check your connection and try again.");
+                  } finally {
+                    setLoading(false);
+                  }
                 }}
               >
                 <Text style={styles.rejectButtonIcon}>✕</Text>
@@ -590,6 +988,81 @@ export default function ProfileCard({
             >
               <Text style={styles.viewMoreButtonText}>View Full Compatibility Report</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showUpgradeModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowUpgradeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Upgrade to {premiumPlan.displayName}</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowUpgradeModal(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.premiumPlanContainer}>
+              <Text style={styles.premiumPrice}>₹{premiumPlan.amountInr}/year</Text>
+              <Text style={styles.premiumSubtitle}>Unlock better matches and unlimited actions</Text>
+
+              <View style={styles.premiumFeatureItem}>
+                <Text style={styles.premiumFeatureIcon}>💝</Text>
+                <Text style={styles.premiumFeatureText}>
+                  {premiumPlan.features.unlimitedInterests ? "Unlimited interests" : "Interest access enabled"}
+                </Text>
+              </View>
+              <View style={styles.premiumFeatureItem}>
+                <Text style={styles.premiumFeatureIcon}>✅</Text>
+                <Text style={styles.premiumFeatureText}>
+                  {premiumPlan.features.verifiedBadge ? "Verified badge" : "Profile trust boost"}
+                </Text>
+              </View>
+              <View style={styles.premiumFeatureItem}>
+                <Text style={styles.premiumFeatureIcon}>🔎</Text>
+                <Text style={styles.premiumFeatureText}>
+                  {premiumPlan.features.advancedSearch ? "Advanced search" : "Better search visibility"}
+                </Text>
+              </View>
+              <View style={styles.premiumFeatureItem}>
+                <Text style={styles.premiumFeatureIcon}>💬</Text>
+                <Text style={styles.premiumFeatureText}>
+                  {premiumPlan.features.basicMessaging ? "Messaging access" : "Messaging unlocked"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.premiumActionRow}>
+              <TouchableOpacity
+                style={styles.premiumLaterButton}
+                onPress={() => {
+                  setShowUpgradeModal(false);
+                  router.push("/settings");
+                }}
+              >
+                <Text style={styles.premiumLaterText}>View Plans</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.premiumBuyButton, upgradeLoading && styles.premiumBuyButtonDisabled]}
+                onPress={handlePurchasePremium}
+                disabled={upgradeLoading}
+              >
+                {upgradeLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.premiumBuyText}>Purchase Plan</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -743,6 +1216,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#555",
     flex: 1,
+  },
+  distanceTag: {
+    backgroundColor: "#9C27B0",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  distanceTagText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "500",
   },
   onlineTag: {
     backgroundColor: "#4CAF50",
@@ -1201,5 +1686,75 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "bold",
+  },
+  premiumPlanContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  premiumPrice: {
+    fontSize: 34,
+    fontWeight: "bold",
+    color: "#E91E63",
+    textAlign: "center",
+  },
+  premiumSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  premiumFeatureItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    backgroundColor: "#f8f9fa",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  premiumFeatureIcon: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  premiumFeatureText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "600",
+  },
+  premiumActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  premiumLaterButton: {
+    flex: 1,
+    backgroundColor: "#f1f1f1",
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  premiumLaterText: {
+    color: "#444",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  premiumBuyButton: {
+    flex: 1,
+    backgroundColor: "#E91E63",
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  premiumBuyButtonDisabled: {
+    opacity: 0.7,
+  },
+  premiumBuyText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "800",
   },
 });

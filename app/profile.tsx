@@ -41,6 +41,7 @@ interface UserProfile {
     motherTongue: string;
     aboutMe: string;
     profileImage: string | null;
+    profileImages?: string[];
   };
   religion: {
     religion: string;
@@ -104,13 +105,54 @@ const safeJoin = (arr: any, separator: string = ", "): string => {
   if (Array.isArray(arr) && arr.length > 0) {
     return arr.join(separator);
   }
-  return "Not specified";
+  return "";
+};
+
+// Calculate age from date of birth (format: YYYY/MM/DD)
+const calculateAge = (birthDate: string): number => {
+  if (!birthDate) return 0;
+  
+  const parts = birthDate.replace(/-/g, '/').split('/');
+  if (parts.length !== 3) return 0;
+  
+  const birthYear = parseInt(parts[0]);
+  const birthMonth = parseInt(parts[1]);
+  const birthDay = parseInt(parts[2]);
+  
+  const today = new Date();
+  const birth = new Date(birthYear, birthMonth - 1, birthDay);
+  
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  
+  // If birthday hasn't occurred yet this year, subtract 1
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDay)) {
+    age--;
+  }
+  
+  return age;
 };
 
 const booleanToYesNo = (value: any | null | undefined): string => {
+  if (typeof value === "string" && value.trim() !== "") return value;
   if (value == true || value == 'true') return "Yes";
   if (value == false || value == 'false') return "No";
-  return "Not specified";
+  return "";
+};
+
+const normalizeManglikForForm = (value: any | null | undefined): string => {
+  if (typeof value === "string" && value.trim() !== "") return value;
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  return "";
+};
+
+const normalizeLifestyleForSave = (value: any | null | undefined): string => {
+  if (value === undefined || value === null) return "";
+  if (value === true || value === "true") return "Yes";
+  if (value === false || value === "false") return "No";
+  const str = String(value).trim();
+  return str === "Not specified" ? "" : str;
 };
 
 export default function ProfileScreen() {
@@ -155,18 +197,19 @@ export default function ProfileScreen() {
       const hobbiesArray = formData.hobbies ? formData.hobbies.split(',').map((h: string) => h.trim()).filter((h: string) => h) : [];
       const interestsArray = formData.interests ? formData.interests.split(',').map((i: string) => i.trim()).filter((i: string) => i) : [];
 
-      const convertToBoolean = (value: string): boolean | null => {
-        if (value === "Yes") return true;
-        if (value === "No") return false;
-        return null;
-      };
+      // Calculate age from birth date
+      const birthDate = formData.birthDate ? formData.birthDate : profile.personal?.dateOfBirth;
+      const calculatedAge = calculateAge(birthDate);
 
       const updateData = {
+        // update top-level user fields
+        email: formData.email || profile.email,
+        mobile: formData.phone || profile.mobile,
         personal: {
           ...profile.personal,
           fullName: formData.name,
-          age: parseInt(formData.age),
-          dateOfBirth: formData.birthDate ? formData.birthDate : profile.personal?.dateOfBirth,
+          age: calculatedAge,
+          dateOfBirth: birthDate,
           birthTime: formData.birthTime || profile.personal?.birthTime,
           aboutMe: formData.bio,
           height: formData.height,
@@ -214,8 +257,8 @@ export default function ProfileScreen() {
         },
         lifestyle: {
           diet: formData.diet || "",
-          smoking: convertToBoolean(formData.smoking),
-          drinking: convertToBoolean(formData.drinking),
+          smoking: normalizeLifestyleForSave(formData.smoking),
+          drinking: normalizeLifestyleForSave(formData.drinking),
           hobbies: hobbiesArray,
           interests: interestsArray,
         },
@@ -232,6 +275,38 @@ export default function ProfileScreen() {
         },
         partnerPreferences: profile.partnerPreferences,
       };
+
+      // if there are any local image URIs (not starting with http), upload them first
+      let uploadedUrls: string[] = [];
+      const localImages = formData.images
+        ? formData.images.filter((uri: string) => !uri.startsWith('http'))
+        : [];
+       // console.log(formData.images);
+      if (localImages.length > 0) {
+        const uploadResp = await apiService.uploadPhotos(localImages);
+        if (uploadResp.success) {
+          const urlsFromData = uploadResp.data?.urls;
+          const urlsFromRoot = (uploadResp as any).urls;
+          const resolvedUrls = Array.isArray(urlsFromData)
+            ? urlsFromData
+            : Array.isArray(urlsFromRoot)
+              ? urlsFromRoot
+              : [];
+          uploadedUrls = resolvedUrls;
+        }
+      }
+  console.log(formData.images);
+  console.log(uploadedUrls);
+      // combine remote and existing http images
+      const existingUrls = formData.images
+        ? formData.images.filter((uri: string) => uri.startsWith('http'))
+        : [];
+      const finalImages = [...uploadedUrls, ...existingUrls];
+       console.log(finalImages);
+      if (finalImages.length > 0) {
+        updateData.personal.profileImages = finalImages;
+        updateData.personal.profileImage = finalImages[0];
+      }
 
       const response = await apiService.updateUserProfile(updateData as any);
 
@@ -310,70 +385,74 @@ export default function ProfileScreen() {
 
   if (isEditing) {
     return (
-      <ThemedView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.editHeader}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleCancelEdit}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <ThemedText style={styles.editTitle}>Edit Profile</ThemedText>
-            <View style={styles.placeholder} />
-          </View>
-          <UserForm
-            initialData={{
-              name: profile.personal?.fullName || "",
-              age: profile.personal?.age?.toString() || "",
-              location:
-                profile.addresses?.length > 0
-                  ? `${profile.addresses[0].city}, ${profile.addresses[0].state}`
-                  : "",
-              occupation: profile.professional?.occupation || "",
-              bio: profile.personal?.aboutMe || "",
-              images: profile.personal?.profileImage
+      <ThemedView style={[styles.container, styles.editContainer]}>
+        <View style={styles.editHeader}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={handleCancelEdit}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+          <ThemedText style={styles.editTitle}>Edit Profile</ThemedText>
+          <View style={styles.placeholder} />
+        </View>
+        <UserForm
+          initialData={{
+            name: profile.personal?.fullName || "",
+            location:
+              profile.addresses?.length > 0
+                ? `${profile.addresses[0].city}, ${profile.addresses[0].state}`
+                : "",
+            occupation: profile.professional?.occupation || "",
+            bio: profile.personal?.aboutMe || "",
+            images: (profile.personal?.profileImages && profile.personal.profileImages.length > 0)
+              ? profile.personal.profileImages
+              : profile.personal?.profileImage
                 ? [profile.personal.profileImage]
                 : [],
-              email: profile.email || "",
-              phone: profile.mobile || "Not specified",
-              religion: profile.religion?.religion || "",
-              caste: profile.religion?.caste || "",
-              height: profile.personal?.height || "",
-              education:
-                profile.education?.length > 0
-                  ? profile.education[0].degree
-                  : "",
-              income: profile.professional?.annualIncome || "",
-              fatherName: profile.family?.fatherName || "",
-              fatherOccupation: profile.family?.fatherOccupation || "",
-              motherName: profile.family?.motherName || "",
-              motherOccupation: profile.family?.motherOccupation || "",
-              siblings: profile.family?.siblings || "",
-              familyType: profile.family?.familyType || "",
-              familyValues: profile.family?.familyValues || "",
-              diet: profile.lifestyle?.diet || "",
-              smoking: booleanToYesNo(profile.lifestyle?.smoking),
-              drinking: booleanToYesNo(profile.lifestyle?.drinking),
-              hobbies: safeJoin(profile.lifestyle?.hobbies, ", "),
-              interests: safeJoin(profile.lifestyle?.interests, ", "),
-              birthPlace: profile.kundli?.birthPlace || "",
-              birthTime: profile.kundli?.birthTime || "",
-              manglik: profile.kundli?.manglik || profile.religion?.manglik || "",
-              rashi: profile.kundli?.rashi || "",
-              nakshatra: profile.kundli?.nakshatra || "",
-            }}
-            onSubmit={handleSaveProfile}
-            submitButtonText="Save Profile"
-          />
-        </ScrollView>
+            email: profile.email || "",
+            phone: profile.mobile || "",
+            religion: profile.religion?.religion || "",
+            caste: profile.religion?.caste || "",
+            height: profile.personal?.height || "",
+            education:
+              profile.education?.length > 0
+                ? profile.education[0].degree
+                : "",
+            income: profile.professional?.annualIncome || "",
+            fatherName: profile.family?.fatherName || "",
+            fatherOccupation: profile.family?.fatherOccupation || "",
+            motherName: profile.family?.motherName || "",
+            motherOccupation: profile.family?.motherOccupation || "",
+            siblings: profile.family?.siblings || "",
+            familyType: profile.family?.familyType || "",
+            familyValues: profile.family?.familyValues || "",
+            diet: profile.lifestyle?.diet || "",
+            smoking: booleanToYesNo(profile.lifestyle?.smoking),
+            drinking: booleanToYesNo(profile.lifestyle?.drinking),
+            hobbies: safeJoin(profile.lifestyle?.hobbies, ", "),
+            interests: safeJoin(profile.lifestyle?.interests, ", "),
+            birthDate: profile.personal?.dateOfBirth ? profile.personal.dateOfBirth.replace(/-/g, '/') : "",
+            birthPlace: profile.kundli?.birthPlace || "",
+            birthTime: profile.kundli?.birthTime || "",
+            manglik: normalizeManglikForForm(profile.kundli?.manglik ?? profile.religion?.manglik),
+            rashi: profile.kundli?.rashi || "",
+            nakshatra: profile.kundli?.nakshatra || "",
+          }}
+          onSubmit={handleSaveProfile}
+          submitButtonText="Save Profile"
+        />
       </ThemedView>
     );
   }
 
-  // Get profile images for slider
-  const profileImage = profile.personal?.profileImage || "https://randomuser.me/api/portraits/women/3.jpg";
-  const profileImages = [profileImage];
+  // Get profile images for slider (use array if available)
+  const profileImages = (profile.personal?.profileImages && profile.personal.profileImages.length > 0)
+    ? profile.personal.profileImages
+    : (profile as any).images && (profile as any).images.length > 0
+      ? (profile as any).images
+      : [profile.personal?.profileImage || "https://randomuser.me/api/portraits/women/3.jpg"];
+  const profileImage = profileImages[0];
 
   return (
     <ThemedView style={styles.container}>
@@ -675,6 +754,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  editContainer: {
+    flex: 1,
   },
   editHeader: {
     flexDirection: "row",
