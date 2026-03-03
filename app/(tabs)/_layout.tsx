@@ -1,4 +1,9 @@
 import { apiService } from "@/services/api";
+import { API_CONFIG } from "@/constants/config";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+import * as Notifications from "expo-notifications";
 import { Tabs, router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -12,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { io, Socket } from "socket.io-client";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -23,14 +29,179 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const slideAnim = useRef(new Animated.Value(-250)).current;
+  const socketRef = useRef<Socket | null>(null);
   const [userProfile, setUserProfile] = useState<{
     name: string;
     image: string;
+    gender?: "male" | "female" | "other";
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchUserProfile();
+  }, []);
+
+  useEffect(() => {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+
+    Notifications.setNotificationCategoryAsync("incoming_call", [
+      {
+        identifier: "ACCEPT_CALL",
+        buttonTitle: "Accept",
+      },
+      {
+        identifier: "REJECT_CALL",
+        buttonTitle: "Reject",
+        options: {
+          isDestructive: true,
+        },
+      },
+    ]).catch(() => undefined);
+
+    const registerPushToken = async () => {
+      try {
+        if (!Device.isDevice) return;
+
+        const permission = await Notifications.getPermissionsAsync();
+        let status = permission.status;
+        if (status !== "granted") {
+          const request = await Notifications.requestPermissionsAsync();
+          status = request.status;
+        }
+
+        if (status !== "granted") {
+          return;
+        }
+
+        const projectId =
+          (Constants as any)?.expoConfig?.extra?.eas?.projectId ||
+          (Constants as any)?.easConfig?.projectId;
+
+        const token = await Notifications.getExpoPushTokenAsync({ projectId });
+        if (token?.data) {
+          await apiService.registerPushToken(token.data);
+        }
+      } catch (error) {
+        console.error("Push token registration failed:", error);
+      }
+    };
+
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
+      const data = response?.notification?.request?.content?.data as any;
+      if (!data || data.type !== "incoming_video_call") return;
+
+      const conversationId = String(data.conversationId || "");
+      const callerId = String(data.callerId || "");
+      const callerName = String(data.callerName || "Someone");
+
+      if (!conversationId || !callerId) return;
+
+      if (response.actionIdentifier === "ACCEPT_CALL") {
+        socketRef.current?.emit("video-call-response", {
+          callerId,
+          conversationId,
+          status: "accepted",
+        });
+        router.push(
+          `/video-call/${conversationId}?targetUserId=${callerId}&targetName=${encodeURIComponent(
+            callerName,
+          )}&initiator=0` as any,
+        );
+      }
+
+      if (response.actionIdentifier === "REJECT_CALL") {
+        socketRef.current?.emit("video-call-response", {
+          callerId,
+          conversationId,
+          status: "rejected",
+        });
+      }
+    });
+
+    registerPushToken();
+
+    return () => {
+      responseSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const setupGlobalCallSocket = async () => {
+      const token = await AsyncStorage.getItem("accessToken");
+      if (!token || !isMounted) return;
+
+      const socketServerUrl = API_CONFIG.BASE_URL.replace(/\/api\/v\d+\/?$/, "");
+      const socket = io(socketServerUrl, {
+        transports: ["websocket"],
+        auth: { token },
+      });
+
+      socketRef.current = socket;
+
+      socket.on("video-call-invite", (payload: any) => {
+        const callerName = String(payload?.callerName || "Someone");
+        const conversationId = String(payload?.conversationId || "");
+        const callerId = String(payload?.callerId || "");
+        const sessionId = String(payload?.sessionId || "");
+
+        if (!conversationId || !callerId) {
+          return;
+        }
+
+        Alert.alert(
+          "Incoming Video Call",
+          `${callerName} is calling you`,
+          [
+            {
+              text: "Reject",
+              style: "destructive",
+              onPress: () => {
+                socket.emit("video-call-response", {
+                  callerId,
+                  conversationId,
+                  status: "rejected",
+                  sessionId,
+                });
+              },
+            },
+            {
+              text: "Accept",
+              onPress: () => {
+                socket.emit("video-call-response", {
+                  callerId,
+                  conversationId,
+                  status: "accepted",
+                  sessionId,
+                });
+                router.push(
+                  `/video-call/${conversationId}?targetUserId=${callerId}&targetName=${encodeURIComponent(
+                    callerName,
+                  )}&initiator=0` as any,
+                );
+              },
+            },
+          ],
+        );
+      });
+    };
+
+    setupGlobalCallSocket();
+
+    return () => {
+      isMounted = false;
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
   }, []);
 
   const getDrawerName = (profile: any): string => {
@@ -53,6 +224,24 @@ export default function TabLayout() {
     );
   };
 
+  const getDrawerGender = (profile: any): "male" | "female" | "other" => {
+    const normalizedGender = String(
+      profile?.personal?.gender || profile?.gender || "",
+    )
+      .trim()
+      .toLowerCase();
+
+    if (normalizedGender === "female" || normalizedGender === "f") {
+      return "female";
+    }
+
+    if (normalizedGender === "male" || normalizedGender === "m") {
+      return "male";
+    }
+
+    return "other";
+  };
+
   const fetchUserProfile = async () => {
     try {
       const response = await apiService.getUserProfile();
@@ -60,11 +249,13 @@ export default function TabLayout() {
         setUserProfile({
           name: getDrawerName(response.data),
           image: getDrawerImage(response.data) || "",
+          gender: getDrawerGender(response.data),
         });
       } else {
         setUserProfile({
           name: "User",
           image: "",
+          gender: "other",
         });
       }
     } catch (error) {
@@ -73,6 +264,7 @@ export default function TabLayout() {
       setUserProfile({
         name: "User",
         image: "",
+        gender: "other",
       });
     } finally {
       setLoading(false);
@@ -117,9 +309,22 @@ export default function TabLayout() {
             style={styles.profileImage}
           />
         ) : (
-          <View style={styles.profileImageFallback}>
+          <View
+            style={[
+              styles.profileImageFallback,
+              userProfile?.gender === "female"
+                ? styles.profileImageFallbackFemale
+                : userProfile?.gender === "male"
+                  ? styles.profileImageFallbackMale
+                  : styles.profileImageFallbackNeutral,
+            ]}
+          >
             <Text style={styles.profileImageFallbackText}>
-              {(userProfile?.name || "U").charAt(0).toUpperCase()}
+              {userProfile?.gender === "female"
+                ? "♀"
+                : userProfile?.gender === "male"
+                  ? "♂"
+                  : (userProfile?.name || "U").charAt(0).toUpperCase()}
             </Text>
           </View>
         )}
@@ -183,6 +388,15 @@ export default function TabLayout() {
         style={styles.drawerItem}
       >
         <Text style={styles.drawerItemText}>Messages</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => {
+          closeDrawer();
+          router.push("/shortlisted");
+        }}
+        style={styles.drawerItem}
+      >
+        <Text style={styles.drawerItemText}>Shortlisted</Text>
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => {
@@ -282,6 +496,12 @@ export default function TabLayout() {
         }}
       >
         <Tabs.Screen
+          name="matches"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
           name="home"
           options={{
             title: "Home",
@@ -291,20 +511,11 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="matches"
+          name="shortlisted"
           options={{
-            title: "Matches",
+            title: "Shortlist",
             tabBarIcon: ({ color }) => (
-              <IconSymbol size={28} name="heart.fill" color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="messages"
-          options={{
-            title: "Messages",
-            tabBarIcon: ({ color }) => (
-              <IconSymbol size={28} name="message.fill" color={color} />
+              <IconSymbol size={28} name="star.fill" color={color} />
             ),
           }}
         />
@@ -314,6 +525,15 @@ export default function TabLayout() {
             title: "Nearby",
             tabBarIcon: ({ color }) => (
               <IconSymbol size={28} name="location.fill" color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="messages"
+          options={{
+            title: "Messages",
+            tabBarIcon: ({ color }) => (
+              <IconSymbol size={28} name="message.fill" color={color} />
             ),
           }}
         />
@@ -362,7 +582,15 @@ const styles = StyleSheet.create({
     marginRight: 15,
     alignItems: "center",
     justifyContent: "center",
+  },
+  profileImageFallbackFemale: {
     backgroundColor: "#E91E63",
+  },
+  profileImageFallbackMale: {
+    backgroundColor: "#1976D2",
+  },
+  profileImageFallbackNeutral: {
+    backgroundColor: "#9E9E9E",
   },
   profileImageFallbackText: {
     color: "#fff",

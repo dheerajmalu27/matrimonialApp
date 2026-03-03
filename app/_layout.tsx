@@ -67,6 +67,10 @@ export default function RootLayout() {
           name="profile/[id]"
           options={{ headerShown: false }}
         />
+        <Stack.Screen
+          name="shortlisted"
+          options={{ headerShown: false }}
+        />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

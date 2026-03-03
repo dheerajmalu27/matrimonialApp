@@ -1,8 +1,9 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { apiService } from "@/services/api";
+import { useFocusEffect } from "@react-navigation/native";
 import { Link } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   FlatList,
   Image,
@@ -18,7 +19,8 @@ interface Conversation {
   lastMessage: string;
   timestamp: string;
   unreadCount: number;
-  image: string;
+  image?: string;
+  gender?: string;
   isOnline: boolean;
 }
 
@@ -27,9 +29,11 @@ export default function MessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchConversations();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchConversations();
+    }, []),
+  );
 
   const fetchConversations = async () => {
     try {
@@ -45,8 +49,8 @@ export default function MessagesScreen() {
           lastMessage: conv.lastMessage?.text || "No messages yet",
           timestamp: new Date(conv.updatedAt).toLocaleDateString(),
           unreadCount: conv.unreadCount,
-          image:
-            conv.participant.profileImage || "https://via.placeholder.com/150",
+          image: conv.participant.profileImage,
+          gender: conv.participant.gender,
           isOnline: conv.participant.isOnline,
         }));
 
@@ -67,7 +71,29 @@ export default function MessagesScreen() {
     <Link href={`/chat/${item.id}` as any} asChild>
       <TouchableOpacity style={styles.conversationItem} activeOpacity={0.8}>
         <View style={styles.avatarContainer}>
-          <Image source={{ uri: item.image }} style={styles.avatar} />
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.avatar} />
+          ) : (
+            <View
+              style={[
+                styles.avatar,
+                styles.avatarFallback,
+                (item.gender || "").toLowerCase() === "female"
+                  ? styles.avatarFallbackFemale
+                  : (item.gender || "").toLowerCase() === "male"
+                    ? styles.avatarFallbackMale
+                    : styles.avatarFallbackNeutral,
+              ]}
+            >
+              <Text style={styles.avatarFallbackText}>
+                {(item.gender || "").toLowerCase() === "female"
+                  ? "♀"
+                  : (item.gender || "").toLowerCase() === "male"
+                    ? "♂"
+                    : "👤"}
+              </Text>
+            </View>
+          )}
           {item.isOnline && (
             <View style={styles.onlineIndicator}>
               <View style={styles.onlineDot} />
@@ -195,6 +221,24 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 3,
     borderColor: "#E91E63",
+  },
+  avatarFallback: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarFallbackFemale: {
+    backgroundColor: "#F8BBD0",
+  },
+  avatarFallbackMale: {
+    backgroundColor: "#BBDEFB",
+  },
+  avatarFallbackNeutral: {
+    backgroundColor: "#E0E0E0",
+  },
+  avatarFallbackText: {
+    fontSize: 22,
+    color: "#37474F",
+    fontWeight: "700",
   },
   onlineIndicator: {
     position: "absolute",

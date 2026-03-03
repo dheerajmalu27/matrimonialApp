@@ -33,6 +33,7 @@ interface UserProfile {
     dateOfBirth: string;
     age: number;
     birthTime: string;
+    location?: string;
     height: string;
     heightCm: number;
     weight: string;
@@ -211,6 +212,7 @@ export default function ProfileScreen() {
           age: calculatedAge,
           dateOfBirth: birthDate,
           birthTime: formData.birthTime || profile.personal?.birthTime,
+          location: formData.location || profile.personal?.location || "",
           aboutMe: formData.bio,
           height: formData.height,
         },
@@ -225,15 +227,6 @@ export default function ProfileScreen() {
           occupation: formData.occupation,
           annualIncome: formData.income,
         },
-        addresses: [
-          {
-            ...(profile.addresses?.[0] || { type: "permanent", city: "", state: "", country: "India", pincode: "" }),
-            city: formData.location?.split(",")[0]?.trim() || profile.addresses?.[0]?.city || "",
-            state: formData.location?.split(",")[1]?.trim() || profile.addresses?.[0]?.state || "",
-            country: "India",
-            type: "permanent",
-          },
-        ],
         education: formData.education
           ? [
               {
@@ -399,10 +392,7 @@ export default function ProfileScreen() {
         <UserForm
           initialData={{
             name: profile.personal?.fullName || "",
-            location:
-              profile.addresses?.length > 0
-                ? `${profile.addresses[0].city}, ${profile.addresses[0].state}`
-                : "",
+            location: profile.personal?.location || "",
             occupation: profile.professional?.occupation || "",
             bio: profile.personal?.aboutMe || "",
             images: (profile.personal?.profileImages && profile.personal.profileImages.length > 0)
@@ -528,9 +518,7 @@ export default function ProfileScreen() {
           <View style={styles.locationRow}>
             <Text style={styles.locationIcon}>Location:</Text>
             <Text style={styles.locationText}>
-              {profile.addresses?.length > 0
-                ? `${profile.addresses[0].city}, ${profile.addresses[0].state}`
-                : "Not specified"}
+              {profile.personal?.location || "Not specified"}
             </Text>
           </View>
         </View>

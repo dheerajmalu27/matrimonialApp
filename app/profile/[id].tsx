@@ -18,6 +18,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import apiService from "@/services/api";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -173,13 +174,38 @@ interface PartnerPreference {
   manglikPreference: string;
 }
 
+interface PremiumPlanInfo {
+  displayName: string;
+  amountInr: number;
+  features: {
+    unlimitedInterests: boolean;
+    verifiedBadge: boolean;
+    advancedSearch: boolean;
+    basicMessaging: boolean;
+  };
+}
+
 export default function ProfileDetailScreen() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [requestStatus, setRequestStatus] = useState<RequestStatus>("none");
+  const [isShortlisted, setIsShortlisted] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [showMatchDetails, setShowMatchDetails] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [premiumPlan, setPremiumPlan] = useState<PremiumPlanInfo>({
+    displayName: "Premium",
+    amountInr: 1200,
+    features: {
+      unlimitedInterests: true,
+      verifiedBadge: true,
+      advancedSearch: true,
+      basicMessaging: true,
+    },
+  });
 
   const getInitialStatus = (profileData: Partial<Profile> | null | undefined): RequestStatus => {
     if (!profileData) return "none";
@@ -226,6 +252,176 @@ export default function ProfileDetailScreen() {
     loadUserPreferences();
   }, []);
 
+  useEffect(() => {
+    const loadShortlistStatusFromStorage = async () => {
+      try {
+        const userProfileStr = await AsyncStorage.getItem("userProfile");
+        if (!userProfileStr) {
+          setIsShortlisted(false);
+          return;
+        }
+
+        const userProfile = JSON.parse(userProfileStr);
+        const shortlistedIds = Array.isArray(userProfile?.shortlistedUserIds)
+          ? userProfile.shortlistedUserIds.map((entryId: string | number) => String(entryId))
+          : [];
+
+        setIsShortlisted(shortlistedIds.includes(String(id)));
+      } catch (error) {
+        console.error("Error loading shortlist status from storage:", error);
+        setIsShortlisted(false);
+      }
+    };
+
+    if (id) {
+      loadShortlistStatusFromStorage();
+    }
+  }, [id]);
+
+  const updateShortlistedIdsInStorage = async (
+    updater: (existingIds: string[]) => string[]
+  ) => {
+    const userProfileStr = await AsyncStorage.getItem("userProfile");
+    if (!userProfileStr) return;
+
+    const userProfile = JSON.parse(userProfileStr);
+    const existingIds = Array.isArray(userProfile?.shortlistedUserIds)
+      ? userProfile.shortlistedUserIds.map((entryId: string | number) => String(entryId))
+      : [];
+
+    const updatedIds = Array.from(new Set(updater(existingIds)));
+    userProfile.shortlistedUserIds = updatedIds;
+    await AsyncStorage.setItem("userProfile", JSON.stringify(userProfile));
+  };
+
+  const resolveConversationId = async (targetUserId: string) => {
+    const conversationsResponse = await apiService.getConversations();
+    if (conversationsResponse.success && conversationsResponse.data?.conversations) {
+      const matchedConversation = conversationsResponse.data.conversations.find(
+        (conversation) => String(conversation.participant?.id) === String(targetUserId)
+      );
+
+      if (matchedConversation?.id) {
+        return String(matchedConversation.id);
+      }
+    }
+
+    const createResponse = await apiService.createConversation(String(targetUserId));
+    if (createResponse.success && createResponse.data?.id) {
+      return String(createResponse.data.id);
+    }
+
+    return null;
+  };
+
+  const openUpgradeModal = async () => {
+    setShowUpgradeModal(true);
+    try {
+      const response = await apiService.getMonetizationConfig();
+      if (response.success && response.data?.config?.plans?.premium) {
+        const premium = response.data.config.plans.premium;
+        setPremiumPlan({
+          displayName: premium.displayName || "Premium",
+          amountInr: premium.priceInr || 1200,
+          features: {
+            unlimitedInterests: Boolean(premium.features?.unlimitedInterests),
+            verifiedBadge: Boolean(premium.features?.verifiedBadge),
+            advancedSearch: Boolean(premium.features?.advancedSearch),
+            basicMessaging: Boolean(premium.features?.basicMessaging),
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch premium plan:", error);
+    }
+  };
+
+  const canStartVideoCall = async () => {
+    try {
+      const response = await apiService.getMonetizationConfig();
+      if (response.success && response.data?.user?.activePlan !== "premium") {
+        await openUpgradeModal();
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Failed to validate plan for video call:", error);
+      return true;
+    }
+  };
+
+  const handlePurchasePremium = async () => {
+    try {
+      setUpgradeLoading(true);
+
+      const orderResponse = await apiService.createPremiumOrder();
+      if (!orderResponse.success || !orderResponse.data) {
+        Alert.alert("Payment Error", orderResponse.message || "Unable to create payment order.");
+        return;
+      }
+
+      const { keyId, order, plan } = orderResponse.data;
+
+      let userName = "Matrimonial User";
+      try {
+        const userProfileStr = await AsyncStorage.getItem("userProfile");
+        if (userProfileStr) {
+          const parsed = JSON.parse(userProfileStr);
+          userName = parsed?.personal?.fullName || parsed?.name || userName;
+        }
+      } catch (e) {
+        console.error("Failed to read user profile for prefill:", e);
+      }
+
+      let RazorpayCheckout: any = null;
+      try {
+        const razorpayModule = await import("react-native-razorpay");
+        RazorpayCheckout = razorpayModule.default;
+      } catch (importError) {
+        Alert.alert(
+          "Razorpay SDK Missing",
+          "Install and configure react-native-razorpay in your app build to complete in-app payment.",
+        );
+        return;
+      }
+
+      const paymentResult = await RazorpayCheckout.open({
+        key: keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Matrimonial Premium",
+        description: `${plan.displayName} Plan`,
+        order_id: order.id,
+        prefill: {
+          name: userName,
+        },
+        theme: {
+          color: "#E91E63",
+        },
+      });
+
+      const verifyResponse = await apiService.verifyPremiumPayment({
+        razorpay_order_id: paymentResult.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature,
+      });
+
+      if (verifyResponse.success) {
+        setShowUpgradeModal(false);
+        Alert.alert("Payment Successful", "Premium plan activated successfully.");
+      } else {
+        Alert.alert("Verification Failed", verifyResponse.message || "Payment verification failed.");
+      }
+    } catch (error: any) {
+      console.error("Premium purchase error:", error);
+      const message = error?.description || error?.message || "Payment cancelled or failed.";
+      Alert.alert("Payment Failed", message);
+    } finally {
+      setUpgradeLoading(false);
+    }
+  };
+
   // Handle sending interest
   const handleSendInterest = () => {
     if (!profile) return;
@@ -247,7 +443,18 @@ export default function ProfileDetailScreen() {
               }
             } catch (error) {
               console.error("Error sending interest:", error);
-              Alert.alert("Error", "Failed to send interest. Please check your connection and try again.");
+              const message = error instanceof Error ? error.message : "";
+              const normalizedMessage = message.toLowerCase();
+              const isLimitError =
+                normalizedMessage.includes("limit") ||
+                normalizedMessage.includes("premium") ||
+                normalizedMessage.includes("daily interests");
+
+              if (isLimitError) {
+                openUpgradeModal();
+              } else {
+                Alert.alert("Error", "Failed to send interest. Please check your connection and try again.");
+              }
             }
           },
         },
@@ -317,6 +524,12 @@ export default function ProfileDetailScreen() {
               const response = await apiService.acceptInterest(profile.id);
               if (response.success) {
                 setRequestStatus("accepted");
+                if (response.data?.conversationId) {
+                  setConversationId(String(response.data.conversationId));
+                } else {
+                  const resolvedConversationId = await resolveConversationId(String(profile.id));
+                  setConversationId(resolvedConversationId);
+                }
                 Alert.alert("Request Accepted! 🎉", `You and ${profile.personal?.fullName || "this user"} are now connected! You can now message each other.`);
               } else {
                 Alert.alert("Error", response.message || "Failed to accept interest. Please try again.");
@@ -334,7 +547,75 @@ export default function ProfileDetailScreen() {
   // Handle shortlist
   const handleShortlist = () => {
     if (!profile) return;
-    Alert.alert("Shortlisted! ⭐", `${profile.personal?.fullName || "This profile"} has been short-listed.`);
+
+    if (isShortlisted) {
+      Alert.alert(
+        "Remove Shortlist",
+        `Remove ${profile.personal?.fullName || "this profile"} from your shortlist?`,
+        [
+          { text: "No", style: "cancel" },
+          {
+            text: "Yes",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                const shortlistResponse = await apiService.getShortlists();
+                const shortlistItems = shortlistResponse.data || [];
+                const currentEntry = shortlistItems.find(
+                  (item: any) => String(item.shortlistedUserId) === String(profile.id)
+                );
+
+                if (!currentEntry?.id) {
+                  setIsShortlisted(false);
+                  await updateShortlistedIdsInStorage((ids) => ids.filter((entryId) => entryId !== String(profile.id)));
+                  Alert.alert("Updated", `${profile.personal?.fullName || "This profile"} is no longer in shortlist.`);
+                  return;
+                }
+
+                const response = await apiService.removeFromShortlist(String(currentEntry.id));
+                if (response.success) {
+                  setIsShortlisted(false);
+                  await updateShortlistedIdsInStorage((ids) => ids.filter((entryId) => entryId !== String(profile.id)));
+                  Alert.alert("Removed", `${profile.personal?.fullName || "This profile"} removed from shortlist.`);
+                } else {
+                  Alert.alert("Error", response.message || "Failed to remove from shortlist. Please try again.");
+                }
+              } catch (error) {
+                console.error("Error removing shortlist:", error);
+                Alert.alert("Error", "Failed to remove from shortlist. Please check your connection and try again.");
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Shortlist ⭐",
+      `Add ${profile.personal?.fullName || "this profile"} to your shortlist?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Add",
+          onPress: async () => {
+            try {
+              const response = await apiService.addToShortlist(profile.id);
+              if (response.success) {
+                setIsShortlisted(true);
+                await updateShortlistedIdsInStorage((ids) => [...ids, String(profile.id)]);
+                Alert.alert("Shortlisted! ⭐", `${profile.personal?.fullName || "This profile"} has been short-listed.`);
+              } else {
+                Alert.alert("Error", response.message || "Failed to shortlist profile. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error adding shortlist:", error);
+              Alert.alert("Error", "Failed to shortlist profile. Please check your connection and try again.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Calculate match details based on the provided logic
@@ -494,7 +775,14 @@ export default function ProfileDetailScreen() {
         
         if (response.success && response.data) {
           setProfile(response.data);
-          setRequestStatus(getInitialStatus(response.data));
+          const nextStatus = getInitialStatus(response.data);
+          setRequestStatus(nextStatus);
+          if (nextStatus === "accepted") {
+            const resolvedConversationId = await resolveConversationId(String(response.data.id));
+            setConversationId(resolvedConversationId);
+          } else {
+            setConversationId(null);
+          }
         } else {
           console.error("Failed to fetch profile:", response.message);
           Alert.alert("Error", "Failed to load profile");
@@ -521,7 +809,66 @@ export default function ProfileDetailScreen() {
   };
 
   const handleMessage = () => {
-    router.push(`/chat/${id}`);
+    if (!profile) return;
+
+    if (requestStatus !== "accepted") {
+      Alert.alert("Not Connected", "You can message only after request is accepted.");
+      return;
+    }
+
+    const openConversation = async () => {
+      try {
+        const resolvedConversationId = conversationId || (await resolveConversationId(String(profile.id)));
+        if (!resolvedConversationId) {
+          Alert.alert("Chat Not Available", "Conversation not found yet. Please try again in a moment.");
+          return;
+        }
+        setConversationId(resolvedConversationId);
+        router.push(`/chat/${resolvedConversationId}`);
+      } catch (error) {
+        console.error("Error opening conversation:", error);
+        Alert.alert("Error", "Failed to open chat. Please try again.");
+      }
+    };
+
+    openConversation();
+  };
+
+  const handleVideoCall = () => {
+    if (!profile) return;
+
+    if (requestStatus !== "accepted") {
+      Alert.alert("Not Connected", "Video call is available only after request is accepted.");
+      return;
+    }
+
+    const startVideoCall = async () => {
+      try {
+        const canCall = await canStartVideoCall();
+        if (!canCall) {
+          return;
+        }
+
+        const resolvedConversationId =
+          conversationId || (await resolveConversationId(String(profile.id)));
+        if (!resolvedConversationId) {
+          Alert.alert("Call Not Available", "Conversation not found yet. Please try again.");
+          return;
+        }
+
+        const targetName = profile.personal?.fullName || "User";
+        router.push(
+          `/video-call/${resolvedConversationId}?targetUserId=${profile.id}&targetName=${encodeURIComponent(
+            targetName,
+          )}&initiator=1` as any,
+        );
+      } catch (error) {
+        console.error("Error starting video call:", error);
+        Alert.alert("Error", "Failed to start video call. Please try again.");
+      }
+    };
+
+    startVideoCall();
   };
 
   if (loading) {
@@ -663,24 +1010,19 @@ export default function ProfileDetailScreen() {
                 <Text style={styles.actionButtonIcon}>✕</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, styles.shortlistButton]}
+                style={[
+                  styles.actionButton,
+                  isShortlisted ? styles.shortlistButtonActive : styles.shortlistButtonInactive,
+                ]}
                 onPress={handleShortlist}
               >
-                <Text style={styles.actionButtonIcon}>⭐</Text>
+                <Text style={[styles.actionButtonIcon, isShortlisted ? styles.shortlistIconActive : styles.shortlistIconInactive]}>★</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.interestButton]}
                 onPress={handleSendInterest}
               >
                 <Text style={styles.actionButtonIcon}>💝</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.chatButton]}
-                onPress={() => {
-                  Alert.alert("Premium", "Upgrade to premium to chat with this user");
-                }}
-              >
-                <Text style={styles.actionButtonIcon}>💬</Text>
               </TouchableOpacity>
             </>
           )}
@@ -698,24 +1040,19 @@ export default function ProfileDetailScreen() {
                 <Text style={styles.actionButtonIcon}>✕</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, styles.shortlistButton]}
+                style={[
+                  styles.actionButton,
+                  isShortlisted ? styles.shortlistButtonActive : styles.shortlistButtonInactive,
+                ]}
                 onPress={handleShortlist}
               >
-                <Text style={styles.actionButtonIcon}>⭐</Text>
+                <Text style={[styles.actionButtonIcon, isShortlisted ? styles.shortlistIconActive : styles.shortlistIconInactive]}>★</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.sentButton]}
                 onPress={handleCancelRequest}
               >
                 <Text style={styles.actionButtonIcon}>⏳</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.chatButton]}
-                onPress={() => {
-                  Alert.alert("Premium", "Upgrade to premium to chat with this user");
-                }}
-              >
-                <Text style={styles.actionButtonIcon}>💬</Text>
               </TouchableOpacity>
             </>
           )}
@@ -762,6 +1099,12 @@ export default function ProfileDetailScreen() {
               >
                 <Text style={styles.actionButtonIcon}>💬</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.videoButton]}
+                onPress={handleVideoCall}
+              >
+                <Text style={styles.actionButtonIcon}>🎥</Text>
+              </TouchableOpacity>
             </>
           )}
 
@@ -778,24 +1121,19 @@ export default function ProfileDetailScreen() {
                 <Text style={styles.actionButtonIcon}>✕</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, styles.shortlistButton]}
+                style={[
+                  styles.actionButton,
+                  isShortlisted ? styles.shortlistButtonActive : styles.shortlistButtonInactive,
+                ]}
                 onPress={handleShortlist}
               >
-                <Text style={styles.actionButtonIcon}>⭐</Text>
+                <Text style={[styles.actionButtonIcon, isShortlisted ? styles.shortlistIconActive : styles.shortlistIconInactive]}>★</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.interestButton]}
                 onPress={handleSendInterest}
               >
                 <Text style={styles.actionButtonIcon}>💝</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.chatButton]}
-                onPress={() => {
-                  Alert.alert("Premium", "Upgrade to premium to chat with this user");
-                }}
-              >
-                <Text style={styles.actionButtonIcon}>💬</Text>
               </TouchableOpacity>
             </>
           )}
@@ -1049,6 +1387,81 @@ export default function ProfileDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showUpgradeModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowUpgradeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Upgrade to {premiumPlan.displayName}</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowUpgradeModal(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.premiumPlanContainer}>
+              <Text style={styles.premiumPrice}>₹{premiumPlan.amountInr}/year</Text>
+              <Text style={styles.premiumSubtitle}>Unlock better matches and unlimited actions</Text>
+
+              <View style={styles.premiumFeatureItem}>
+                <Text style={styles.premiumFeatureIcon}>💝</Text>
+                <Text style={styles.premiumFeatureText}>
+                  {premiumPlan.features.unlimitedInterests ? "Unlimited interests" : "Interest access enabled"}
+                </Text>
+              </View>
+              <View style={styles.premiumFeatureItem}>
+                <Text style={styles.premiumFeatureIcon}>✅</Text>
+                <Text style={styles.premiumFeatureText}>
+                  {premiumPlan.features.verifiedBadge ? "Verified badge" : "Profile trust boost"}
+                </Text>
+              </View>
+              <View style={styles.premiumFeatureItem}>
+                <Text style={styles.premiumFeatureIcon}>🔎</Text>
+                <Text style={styles.premiumFeatureText}>
+                  {premiumPlan.features.advancedSearch ? "Advanced search" : "Better search visibility"}
+                </Text>
+              </View>
+              <View style={styles.premiumFeatureItem}>
+                <Text style={styles.premiumFeatureIcon}>💬</Text>
+                <Text style={styles.premiumFeatureText}>
+                  {premiumPlan.features.basicMessaging ? "Messaging access" : "Messaging unlocked"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.premiumActionRow}>
+              <TouchableOpacity
+                style={styles.premiumLaterButton}
+                onPress={() => {
+                  setShowUpgradeModal(false);
+                  router.push("/settings");
+                }}
+              >
+                <Text style={styles.premiumLaterText}>View Plans</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.premiumBuyButton, upgradeLoading && styles.premiumBuyButtonDisabled]}
+                onPress={handlePurchasePremium}
+                disabled={upgradeLoading}
+              >
+                {upgradeLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.premiumBuyText}>Purchase Plan</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -1279,10 +1692,26 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#007bff",
   },
-  shortlistButton: {
+  videoButton: {
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#E91E63",
+  },
+  shortlistButtonActive: {
     backgroundColor: "#fff",
     borderWidth: 2,
     borderColor: "#FFD700",
+  },
+  shortlistButtonInactive: {
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#9E9E9E",
+  },
+  shortlistIconActive: {
+    color: "#FFD700",
+  },
+  shortlistIconInactive: {
+    color: "#9E9E9E",
   },
   interestButton: {
     backgroundColor: "#E91E63",
@@ -1707,5 +2136,75 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "bold",
+  },
+  premiumPlanContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  premiumPrice: {
+    fontSize: 34,
+    fontWeight: "bold",
+    color: "#E91E63",
+    textAlign: "center",
+  },
+  premiumSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  premiumFeatureItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    backgroundColor: "#f8f9fa",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  premiumFeatureIcon: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  premiumFeatureText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "600",
+  },
+  premiumActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  premiumLaterButton: {
+    flex: 1,
+    backgroundColor: "#f1f1f1",
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  premiumLaterText: {
+    color: "#444",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  premiumBuyButton: {
+    flex: 1,
+    backgroundColor: "#E91E63",
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  premiumBuyButtonDisabled: {
+    opacity: 0.7,
+  },
+  premiumBuyText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "800",
   },
 });

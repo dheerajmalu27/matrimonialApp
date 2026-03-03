@@ -10,11 +10,11 @@ import React, { useCallback, useEffect } from "react";
 import { StyleSheet } from "react-native";
 
 /**
- * My City tab: profile list scoped to users in the current user's city.
+ * Shortlisted screen: profiles that current user has shortlisted.
  */
-export default function MyCityScreen() {
-  const fetchSameCityProfiles = useCallback(
-    (limit: number, offset: number) => apiService.getSameCityUsers(limit, offset),
+export default function ShortlistedScreen() {
+  const fetchShortlistedProfiles = useCallback(
+    (limit: number, offset: number) => apiService.getShortlistedProfiles(limit, offset),
     [],
   );
 
@@ -25,7 +25,7 @@ export default function MyCityScreen() {
     fetchProfiles,
     loadMoreProfiles,
     resetProfiles,
-  } = usePaginatedProfileCards(fetchSameCityProfiles, 20);
+  } = usePaginatedProfileCards(fetchShortlistedProfiles, 20);
 
   useEffect(() => {
     fetchProfiles();
@@ -38,7 +38,7 @@ export default function MyCityScreen() {
   if (isLoading && profiles.length === 0) {
     return (
       <ThemedView style={styles.container}>
-        <ProfileListInitialLoading message="Loading profiles..." />
+        <ProfileListInitialLoading message="Loading shortlisted profiles..." />
       </ThemedView>
     );
   }
@@ -63,7 +63,7 @@ export default function MyCityScreen() {
         profiles={profiles}
         isLoadingMore={isLoading && profiles.length > 0}
         onLoadMore={handleLoadMore}
-        emptyMessage="No profiles found in your city."
+        emptyMessage="You have not shortlisted any profiles yet."
       />
     </ThemedView>
   );

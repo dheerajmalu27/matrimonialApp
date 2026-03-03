@@ -48,7 +48,7 @@ export default function ForgotPasswordScreen() {
       return null;
     } else if (field === "password") {
       if (!value) return "Password is required";
-      if (value.length < 6) return "Password must be at least 6 characters";
+      if (value.length < 8) return "Password must be at least 8 characters";
       return null;
     } else if (field === "confirmPassword") {
       if (!value) return "Please confirm your password";

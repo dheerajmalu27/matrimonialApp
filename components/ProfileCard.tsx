@@ -1,16 +1,3 @@
-// Request status types
-type RequestStatus = "none" | "sent" | "received" | "accepted" | "declined";
-
-// Match detail interface
-interface MatchDetail {
-  criteria: string;
-  icon: string;
-  points: number;
-  matched: boolean;
-  yourPreference: string;
-  theirValue: string;
-}
-
 import { Link, router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -27,105 +14,30 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedText } from "./themed-text";
 import { apiService } from "../services/api";
-
-interface Profile {
-  id: string;
-  name: string;
-  age: number;
-  location: string;
-  occupation: string;
-  image: string;
-  bio: string;
-  height?: number;
-  religion?: string;
-  caste?: string;
-  isVerified?: boolean;
-  compatibility?: number;
-  isPremium?: boolean;
-  isOnline?: boolean;
-  education?: string;
-  income?: string;
-  images?: string[];
-  motherTongue?: string;
-  // New fields from enhanced API
-  distance?: string;
-  mutualInterests?: number[];
-  profileViews?: number;
-  familyType?: string;
-  profileCompletePercentage?: number;
-  // Interest status from backend
-  interestStatus?: string | null;
-  interestIsSender?: boolean | null;
-  interestId?: string | null;
-  // Legacy request status
-  requestStatus?: RequestStatus;
-}
-
-interface ProfileCardProps {
-  profile: Profile;
-  showActions?: boolean;
-  compact?: boolean;
-}
-
-interface PremiumPlanInfo {
-  displayName: string;
-  amountInr: number;
-  features: {
-    unlimitedInterests: boolean;
-    verifiedBadge: boolean;
-    advancedSearch: boolean;
-    basicMessaging: boolean;
-  };
-}
-
-// Helper function to check if a value exists in a comma-separated preference string
-const isValueInPreference = (value: string, preference: string): boolean => {
-  if (!value || !preference) return false;
-  const preferenceArray = preference.split(",").map((p) => p.trim().toLowerCase());
-  return preferenceArray.some((p) => value.toLowerCase().includes(p));
-};
-
-// Helper function to convert height from CM to feet/inches format
-const convertCmToFeet = (height: number): string => {
-  if (!height || height <= 0) return "";
-  
-  // Convert cm to inches (1 inch = 2.54 cm)
-  const totalInches = height / 2.54;
-  
-  // Calculate feet and remaining inches
-  const feet = Math.floor(totalInches / 12);
-  const inches = Math.round(totalInches % 12);
-  
-  // Return formatted string (e.g., "5' 6\"")
-  return `${feet}' ${inches}"`;
-};
+import type {
+  PartnerPreferences,
+  PremiumPlanInfo,
+  ProfileCardProps,
+  RequestStatus,
+} from "@/types/profileCard";
+import {
+  calculateMatchDetails,
+  convertCmToFeet,
+  DEFAULT_PARTNER_PREFERENCES,
+  getInitialRequestStatus,
+} from "@/utils/profileCardHelpers";
 
 export default function ProfileCard({
   profile,
   showActions = true,
   compact = false,
 }: ProfileCardProps) {
-  // Determine request status from backend interestStatus (props) or fallback to local state
-  // Backend interestStatus: 'pending', 'accepted', 'declined', null
-  // Frontend RequestStatus: 'sent', 'received', 'accepted', 'declined', 'none'
-  
-const getInitialStatus = (): RequestStatus => {
-    if (profile.interestStatus === 'sent') {
-      return profile.interestIsSender ? 'sent' : 'received';
-    }
-    if (profile.interestStatus === 'pending') {
-      return profile.interestIsSender ? 'sent' : 'received';
-    }
-    if (profile.interestStatus === 'accepted') return 'accepted';
-    if (profile.interestStatus === 'declined') return 'declined';
-    return profile.requestStatus || "none";
-  };
-
-  const [requestStatus, setRequestStatus] = useState<RequestStatus>(getInitialStatus());
+  const [requestStatus, setRequestStatus] = useState<RequestStatus>(
+    getInitialRequestStatus(profile),
+  );
   const [showMatchDetails, setShowMatchDetails] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isShortlisted, setIsShortlisted] = useState(false);
-  const [shortlistEntryId, setShortlistEntryId] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [premiumPlan, setPremiumPlan] = useState<PremiumPlanInfo>({
@@ -139,25 +51,13 @@ const getInitialStatus = (): RequestStatus => {
     },
   });
 
-// Default preferences (used as fallback when no user preferences are found)
-  const defaultPreferences = {
-    minAge: 25,
-    maxAge: 35,
-    minHeightCm: 150,
-    maxHeightCm: 180,
-    religion: "",
-    caste: "",
-    education: "",
-    occupation: "",
-    location: "",
-    incomeRange: "",
-    motherTongue: "",
-    kundliMatchRequired: false,
-    manglikPreference: "both",
-  };
+  const [userPreferences, setUserPreferences] = useState<PartnerPreferences>(
+    DEFAULT_PARTNER_PREFERENCES,
+  );
 
-// User's preferences - loaded from localStorage (initialized with defaults to avoid null errors)
-  const [userPreferences, setUserPreferences] = useState<any>(defaultPreferences);
+  const normalizedGender = String(profile?.gender || "").toLowerCase();
+  const isFemale = normalizedGender === "female" || normalizedGender === "f";
+  const isMale = normalizedGender === "male" || normalizedGender === "m";
 
   // Load user preferences from localStorage
   useEffect(() => {
@@ -171,7 +71,7 @@ const getInitialStatus = (): RequestStatus => {
           
           // Check for partnerPreference property
           if (userProfile.partnerPreference && userProfile.partnerPreference.minAge !== undefined) {
-          await  setUserPreferences(userProfile.partnerPreference);
+            setUserPreferences(userProfile.partnerPreference as PartnerPreferences);
             console.log("Successfully loaded partnerPreference:", JSON.stringify(userProfile.partnerPreference));
           } else {
             console.log("No valid partnerPreference found, using defaults");
@@ -188,30 +88,66 @@ const getInitialStatus = (): RequestStatus => {
   }, []);
 
   useEffect(() => {
-    const loadShortlistStatus = async () => {
+    const loadShortlistStatusFromStorage = async () => {
       try {
-        const shortlistResponse = await apiService.getShortlists();
-        const shortlistItems = shortlistResponse.data || [];
-        const currentEntry = shortlistItems.find(
-          (item: any) => String(item.shortlistedUserId) === String(profile.id)
-        );
-
-        if (currentEntry) {
-          setIsShortlisted(true);
-          setShortlistEntryId(String(currentEntry.id));
-        } else {
+        const userProfileStr = await AsyncStorage.getItem("userProfile");
+        if (!userProfileStr) {
           setIsShortlisted(false);
-          setShortlistEntryId(null);
+          return;
         }
+
+        const userProfile = JSON.parse(userProfileStr);
+        const shortlistedIds = Array.isArray(userProfile?.shortlistedUserIds)
+          ? userProfile.shortlistedUserIds.map((id: string | number) => String(id))
+          : [];
+
+        setIsShortlisted(shortlistedIds.includes(String(profile.id)));
       } catch (error) {
-        console.error("Error loading shortlist status:", error);
+        console.error("Error loading shortlist status from storage:", error);
+        setIsShortlisted(false);
       }
     };
 
     if (profile?.id) {
-      loadShortlistStatus();
+      loadShortlistStatusFromStorage();
     }
   }, [profile?.id]);
+
+  const updateShortlistedIdsInStorage = async (
+    updater: (existingIds: string[]) => string[]
+  ) => {
+    const userProfileStr = await AsyncStorage.getItem("userProfile");
+    if (!userProfileStr) return;
+
+    const userProfile = JSON.parse(userProfileStr);
+    const existingIds = Array.isArray(userProfile?.shortlistedUserIds)
+      ? userProfile.shortlistedUserIds.map((id: string | number) => String(id))
+      : [];
+
+    const updatedIds = Array.from(new Set(updater(existingIds)));
+    userProfile.shortlistedUserIds = updatedIds;
+    await AsyncStorage.setItem("userProfile", JSON.stringify(userProfile));
+  };
+
+  const resolveConversationId = async (targetUserId: string) => {
+    const conversationsResponse = await apiService.getConversations();
+    if (conversationsResponse.success && conversationsResponse.data?.conversations) {
+      const matchedConversation = conversationsResponse.data.conversations.find(
+        (conversation) => String(conversation.participant?.id) === String(targetUserId)
+      );
+
+      if (matchedConversation?.id) {
+        return String(matchedConversation.id);
+      }
+    }
+
+    const createResponse = await apiService.createConversation(String(targetUserId));
+    if (createResponse.success && createResponse.data?.id) {
+      return String(createResponse.data.id);
+    }
+
+    return null;
+  };
 
   const openUpgradeModal = async () => {
     setShowUpgradeModal(true);
@@ -306,119 +242,7 @@ const getInitialStatus = (): RequestStatus => {
     }
   };
 
-  // Calculate match details based on the provided logic
-  const calculateMatchDetails = (): MatchDetail[] => {
-    const details: MatchDetail[] = [];
-   
-    // 🎂 Age (25 points)
-    const ageMatch = profile.age >= userPreferences.minAge && profile.age <= userPreferences.maxAge;
-    details.push({
-      criteria: "Age",
-      icon: "🎂",
-      points: 25,
-      matched: ageMatch,
-      yourPreference: `${userPreferences.minAge} - ${userPreferences.maxAge} years`,
-      theirValue: `${profile.age} years`,
-    });
-
-    // 📏 Height (15 points)
-    const heightMatch = profile.height 
-      ? profile.height >= userPreferences.minHeightCm && profile.height <= userPreferences.maxHeightCm
-      : false;
-    details.push({
-      criteria: "Height",
-      icon: "📏",
-      points: 15,
-      matched: heightMatch,
-      yourPreference: `${userPreferences.minHeightCm} - ${userPreferences.maxHeightCm} cm`,
-      theirValue: profile.height ? `${profile.height} cm` : "N/A",
-    });
-
-    // 🛕 Religion & Caste (20 points) - Multi-value support
-    const religionMatch = isValueInPreference(profile.religion || "", userPreferences.religion);
-    const casteMatch = isValueInPreference(profile.caste || "", userPreferences.caste);
-    const religionCasteMatch = religionMatch && casteMatch;
-    details.push({
-      criteria: "Religion & Caste",
-      icon: "🛕",
-      points: 20,
-      matched: religionCasteMatch,
-      yourPreference: userPreferences.religion || "Any",
-      theirValue: `${profile.religion || "N/A"}, ${profile.caste || "N/A"}`,
-    });
-
-    // 🎓 Education (15 points) - Multi-value support
-    const educationMatch = isValueInPreference(profile.education || "", userPreferences.education);
-    details.push({
-      criteria: "Education",
-      icon: "🎓",
-      points: 15,
-      matched: educationMatch,
-      yourPreference: userPreferences.education || "Any",
-      theirValue: profile.education || "N/A",
-    });
-
-    // 💼 Occupation (10 points) - Multi-value support
-    const occupationMatch = isValueInPreference(profile.occupation || "", userPreferences.occupation);
-    details.push({
-      criteria: "Occupation",
-      icon: "💼",
-      points: 10,
-      matched: occupationMatch,
-      yourPreference: userPreferences.occupation || "Any",
-      theirValue: profile.occupation || "N/A",
-    });
-
-    // 📍 Location (10 points) - Multi-value support
-    const locationMatch = isValueInPreference(profile.location || "", userPreferences.location);
-    details.push({
-      criteria: "Location",
-      icon: "📍",
-      points: 10,
-      matched: locationMatch,
-      yourPreference: userPreferences.location || "Any",
-      theirValue: profile.location || "Not specified",
-    });
-
-    // 💰 Income (5 points) - Multi-value support
-    const incomeMatch = isValueInPreference(profile.income || "", userPreferences.incomeRange);
-    details.push({
-      criteria: "Income Range",
-      icon: "💰",
-      points: 5,
-      matched: incomeMatch,
-      yourPreference: userPreferences.incomeRange || "Any",
-      theirValue: profile.income || "N/A",
-    });
-
-    // 🗣 Mother Tongue (5 points) - Multi-value support
-    
-    const motherTongueMatch = isValueInPreference(profile.motherTongue || "", userPreferences.motherTongue);
-   
-    details.push({
-      criteria: "Mother Tongue",
-      icon: "🗣",
-      points: 5,
-      matched: motherTongueMatch,
-      yourPreference: userPreferences.motherTongue || "Any",
-      theirValue: profile.motherTongue || "N/A",
-    });
-
-    // 🔮 Kundli Matching (10 points)
-    const kundliMatch = userPreferences.kundliMatchRequired;
-    details.push({
-      criteria: "Kundli Matching",
-      icon: "🔮",
-      points: 10,
-      matched: kundliMatch,
-      yourPreference: userPreferences.kundliMatchRequired ? `Manglik: ${userPreferences.manglikPreference}` : "Not required",
-      theirValue: "Kundli match",
-    });
-
-    return details;
-  };
-
-  const matchDetails = calculateMatchDetails();
+  const matchDetails = calculateMatchDetails(profile, userPreferences);
   const matchPercentage =  Math.round(
     (matchDetails.reduce((acc, d) => acc + (d.matched ? d.points : 0), 0) / 100) * 100
   );
@@ -559,15 +383,30 @@ const getInitialStatus = (): RequestStatus => {
   };
 
   // Handle sending message (only when connected)
-  const handleMessage = () => {
-    Alert.alert("Message 💬", `Start conversation with ${profile.name}`);
+  const handleMessage = async () => {
+    try {
+      setLoading(true);
+      const resolvedConversationId = await resolveConversationId(String(profile.id));
+
+      if (!resolvedConversationId) {
+        Alert.alert("Chat Not Available", "Unable to open conversation right now. Please try again.");
+        return;
+      }
+
+      router.push(`/chat/${resolvedConversationId}`);
+    } catch (error) {
+      console.error("Error opening conversation:", error);
+      Alert.alert("Error", "Failed to open chat. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle shortlist
   const handleShortlist = () => {
     if (!profile?.id) return;
 
-    if (isShortlisted && shortlistEntryId) {
+    if (isShortlisted) {
       Alert.alert(
         "Remove Shortlist",
         `Remove ${profile.name} from your shortlist?`,
@@ -579,10 +418,23 @@ const getInitialStatus = (): RequestStatus => {
             onPress: async () => {
               try {
                 setLoading(true);
-                const response = await apiService.removeFromShortlist(shortlistEntryId);
+                const shortlistResponse = await apiService.getShortlists();
+                const shortlistItems = shortlistResponse.data || [];
+                const currentEntry = shortlistItems.find(
+                  (item: any) => String(item.shortlistedUserId) === String(profile.id)
+                );
+
+                if (!currentEntry?.id) {
+                  setIsShortlisted(false);
+                  await updateShortlistedIdsInStorage((ids) => ids.filter((id) => id !== String(profile.id)));
+                  Alert.alert("Updated", `${profile.name} is no longer in shortlist.`);
+                  return;
+                }
+
+                const response = await apiService.removeFromShortlist(String(currentEntry.id));
                 if (response.success) {
                   setIsShortlisted(false);
-                  setShortlistEntryId(null);
+                  await updateShortlistedIdsInStorage((ids) => ids.filter((id) => id !== String(profile.id)));
                   Alert.alert("Removed", `${profile.name} removed from shortlist.`);
                 } else {
                   Alert.alert("Error", response.message || "Failed to remove from shortlist. Please try again.");
@@ -612,14 +464,8 @@ const getInitialStatus = (): RequestStatus => {
               setLoading(true);
               const response = await apiService.addToShortlist(profile.id);
               if (response.success) {
-                const shortlistResponse = await apiService.getShortlists();
-                const shortlistItems = shortlistResponse.data || [];
-                const currentEntry = shortlistItems.find(
-                  (item: any) => String(item.shortlistedUserId) === String(profile.id)
-                );
-
                 setIsShortlisted(true);
-                setShortlistEntryId(currentEntry ? String(currentEntry.id) : null);
+                await updateShortlistedIdsInStorage((ids) => [...ids, String(profile.id)]);
                 Alert.alert("Shortlisted! ⭐", `${profile.name} has been short-listed.`);
               } else {
                 Alert.alert("Error", response.message || "Failed to shortlist profile. Please try again.");
@@ -636,6 +482,105 @@ const getInitialStatus = (): RequestStatus => {
     );
   };
 
+  const renderShortlistButton = () => (
+    <TouchableOpacity
+      style={[
+        styles.actionButton,
+        isShortlisted ? styles.shortlistButtonActive : styles.shortlistButtonInactive,
+      ]}
+      onPress={handleShortlist}
+      disabled={loading}
+    >
+      <Text
+        style={[
+          styles.shortlistIcon,
+          isShortlisted ? styles.shortlistIconActive : styles.shortlistIconInactive,
+        ]}
+      >
+        ★
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const renderActionButtons = () => {
+    switch (requestStatus) {
+      case "none":
+      case "declined":
+        return (
+          <>
+            {renderShortlistButton()}
+            <TouchableOpacity style={styles.sendInterestButton} onPress={handleSendInterest}>
+              <Text style={styles.sendInterestIcon}>💝</Text>
+              <Text style={styles.sendInterestText}>Send Interest</Text>
+            </TouchableOpacity>
+          </>
+        );
+
+      case "sent":
+        return (
+          <>
+            {renderShortlistButton()}
+            <TouchableOpacity style={styles.cancelRequestButton} onPress={handleCancelRequest}>
+              <Text style={styles.cancelRequestIcon}>✕</Text>
+              <Text style={styles.cancelRequestText}>Cancel Request</Text>
+            </TouchableOpacity>
+          </>
+        );
+
+      case "received":
+        return (
+          <>
+            <TouchableOpacity
+              style={styles.rejectButton}
+              onPress={async () => {
+                try {
+                  setLoading(true);
+                  const response = await apiService.rejectInterest(profile.id);
+
+                  if (response.success) {
+                    setRequestStatus("declined");
+                    Alert.alert("Rejected", `You have declined the request from ${profile.name}.`);
+                  } else {
+                    Alert.alert("Error", response.message || "Failed to reject interest. Please try again.");
+                  }
+                } catch (error) {
+                  console.error("Error rejecting interest:", error);
+                  Alert.alert("Error", "Failed to reject interest. Please check your connection and try again.");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              <Text style={styles.rejectButtonIcon}>✕</Text>
+              <Text style={styles.rejectButtonText}>Reject</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.acceptButton} onPress={handleAccept}>
+              <Text style={styles.acceptButtonIcon}>✓</Text>
+              <Text style={styles.acceptButtonText}>Accept</Text>
+            </TouchableOpacity>
+          </>
+        );
+
+      case "accepted":
+        return (
+          <>
+            <View style={styles.connectedBadge}>
+              <Text style={styles.connectedBadgeText}>✓ Connected</Text>
+            </View>
+
+            <TouchableOpacity style={styles.messageButtonMain} onPress={handleMessage}>
+              <Text style={styles.messageButtonIcon}>💬</Text>
+              <Text style={styles.messageButtonText}>Message</Text>
+            </TouchableOpacity>
+          </>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   // Calculate image count for indicator
   const imageCount = profile.images?.length || (profile.image ? 1 : 0);
 
@@ -646,10 +591,29 @@ const getInitialStatus = (): RequestStatus => {
           {/* Avatar Section with Overlays */}
           <View style={styles.avatarWrapper}>
             <View style={styles.avatarContainer}>
-              <Image
-                source={{ uri: profile.image || "https://via.placeholder.com/150" }}
-                style={[styles.avatar, compact && styles.compactAvatar]}
-              />
+              {profile.image ? (
+                <Image
+                  source={{ uri: profile.image }}
+                  style={[styles.avatar, compact && styles.compactAvatar]}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.avatar,
+                    compact && styles.compactAvatar,
+                    styles.avatarFallback,
+                    isFemale
+                      ? styles.avatarFallbackFemale
+                      : isMale
+                        ? styles.avatarFallbackMale
+                        : styles.avatarFallbackNeutral,
+                  ]}
+                >
+                  <Text style={styles.avatarFallbackText}>
+                    {isFemale ? "♀" : isMale ? "♂" : "👤"}
+                  </Text>
+                </View>
+              )}
               
               {/* Online Status Indicator */}
               {profile.isOnline && (
@@ -713,7 +677,7 @@ const getInitialStatus = (): RequestStatus => {
 
 {/* Tags for Religion, Caste, Height */}
             <View style={styles.tagsRow}>
-              {(profile.height || profile.height) && (
+              {profile.height && (
                 <View style={styles.heightTag}>
                   <Text style={styles.heightTagText}>📏 {profile.height ? convertCmToFeet(profile.height) : profile.height}</Text>
                 </View>
@@ -787,130 +751,7 @@ const getInitialStatus = (): RequestStatus => {
       {/* Action Buttons - Based on Request Status */}
       {showActions && (
         <View style={styles.actions}>
-          {/* Case 1: No request sent yet - Show Send Interest button */}
-          {requestStatus === "none" && (
-            <>
-              {/* Shortlist Button */}
-              <TouchableOpacity
-                style={[styles.actionButton, styles.shortlistButton]}
-                onPress={handleShortlist}
-              >
-                <Text style={styles.shortlistIcon}>⭐</Text>
-              </TouchableOpacity>
-
-              {/* Send Interest Button - Primary Action */}
-              <TouchableOpacity
-                style={styles.sendInterestButton}
-                onPress={handleSendInterest}
-              >
-                <Text style={styles.sendInterestIcon}>💝</Text>
-                <Text style={styles.sendInterestText}>Send Interest</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {/* Case 2: Request already sent - Show Cancel Request button */}
-          {requestStatus === "sent" && (
-            <>
-              {/* Shortlist Button */}
-              <TouchableOpacity
-                style={[styles.actionButton, styles.shortlistButton]}
-                onPress={handleShortlist}
-              >
-                <Text style={styles.shortlistIcon}>⭐</Text>
-              </TouchableOpacity>
-
-              {/* Cancel Request Button */}
-              <TouchableOpacity
-                style={styles.cancelRequestButton}
-                onPress={handleCancelRequest}
-              >
-                <Text style={styles.cancelRequestIcon}>✕</Text>
-                <Text style={styles.cancelRequestText}>Cancel Request</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {/* Case 3: Received request - Show Accept and Reject buttons */}
-          {requestStatus === "received" && (
-            <>
-              {/* Reject Button */}
-              <TouchableOpacity
-                style={styles.rejectButton}
-                onPress={async () => {
-                  try {
-                    setLoading(true);
-                    const response = await apiService.rejectInterest(profile.id);
-                    
-                    if (response.success) {
-                      setRequestStatus("declined");
-                      Alert.alert("Rejected", `You have declined the request from ${profile.name}.`);
-                    } else {
-                      Alert.alert("Error", response.message || "Failed to reject interest. Please try again.");
-                    }
-                  } catch (error) {
-                    console.error("Error rejecting interest:", error);
-                    Alert.alert("Error", "Failed to reject interest. Please check your connection and try again.");
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-              >
-                <Text style={styles.rejectButtonIcon}>✕</Text>
-                <Text style={styles.rejectButtonText}>Reject</Text>
-              </TouchableOpacity>
-
-              {/* Accept Button */}
-              <TouchableOpacity
-                style={styles.acceptButton}
-                onPress={handleAccept}
-              >
-                <Text style={styles.acceptButtonIcon}>✓</Text>
-                <Text style={styles.acceptButtonText}>Accept</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {/* Case 4: Request accepted/Connected - Show Message button */}
-          {requestStatus === "accepted" && (
-            <>
-              {/* Connected Badge */}
-              <View style={styles.connectedBadge}>
-                <Text style={styles.connectedBadgeText}>✓ Connected</Text>
-              </View>
-
-              {/* Message Button */}
-              <TouchableOpacity
-                style={styles.messageButtonMain}
-                onPress={handleMessage}
-              >
-                <Text style={styles.messageButtonIcon}>💬</Text>
-                <Text style={styles.messageButtonText}>Message</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {/* Case 5: Request declined - Show Send Interest button again */}
-          {requestStatus === "declined" && (
-            <>
-              {/* Shortlist Button */}
-              <TouchableOpacity
-                style={[styles.actionButton, styles.shortlistButton]}
-                onPress={handleShortlist}
-              >
-                <Text style={styles.shortlistIcon}>⭐</Text>
-              </TouchableOpacity>
-
-              {/* Send Interest Button */}
-              <TouchableOpacity
-                style={styles.sendInterestButton}
-                onPress={handleSendInterest}
-              >
-                <Text style={styles.sendInterestIcon}>💝</Text>
-                <Text style={styles.sendInterestText}>Send Interest</Text>
-              </TouchableOpacity>
-            </>
-          )}
+          {renderActionButtons()}
         </View>
       )}
 
@@ -1070,6 +911,8 @@ const getInitialStatus = (): RequestStatus => {
   );
 }
 
+export type { ProfileCardProps };
+
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
@@ -1112,6 +955,24 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     borderWidth: 2,
+  },
+  avatarFallback: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarFallbackFemale: {
+    backgroundColor: "#F8BBD0",
+  },
+  avatarFallbackMale: {
+    backgroundColor: "#BBDEFB",
+  },
+  avatarFallbackNeutral: {
+    backgroundColor: "#E0E0E0",
+  },
+  avatarFallbackText: {
+    fontSize: 28,
+    color: "#37474F",
+    fontWeight: "700",
   },
   onlineIndicator: {
     position: "absolute",
@@ -1376,12 +1237,22 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  shortlistButton: {
+  shortlistButtonActive: {
     borderWidth: 2,
     borderColor: "#FFD700",
   },
+  shortlistButtonInactive: {
+    borderWidth: 2,
+    borderColor: "#9E9E9E",
+  },
   shortlistIcon: {
     fontSize: 20,
+  },
+  shortlistIconActive: {
+    color: "#FFD700",
+  },
+  shortlistIconInactive: {
+    color: "#9E9E9E",
   },
   likeButton: {
     borderWidth: 2,

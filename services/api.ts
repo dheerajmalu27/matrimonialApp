@@ -109,6 +109,7 @@ interface Conversation {
     id: string;
     name: string;
     profileImage?: string;
+    gender?: string;
     isOnline: boolean;
   };
   lastMessage?: {
@@ -301,6 +302,10 @@ interface SendMessageResponse {
   senderId: string;
 }
 
+interface CreateConversationResponse {
+  id: string;
+}
+
 interface AcceptRequestResponse {
   requestId: string;
   senderId: string;
@@ -340,6 +345,7 @@ interface ConversationMessagesResponse {
     id: string;
     name: string;
     profileImage?: string;
+    gender?: string;
   };
   messages: Message[];
   hasMore: boolean;
@@ -385,6 +391,11 @@ class ApiService {
   constructor() {
     this.baseURL = API_CONFIG.BASE_URL;
     this.timeout = API_CONFIG.TIMEOUT;
+  }
+
+  private normalizeNumericId(id: string): string {
+    const match = String(id).match(/(\d+)/);
+    return match ? match[1] : String(id);
   }
 
   private async getAuthHeaders(): Promise<HeadersInit> {
@@ -637,6 +648,19 @@ class ApiService {
     );
   }
 
+  async getShortlistedProfiles(
+    limit = 20,
+    offset = 0,
+  ): Promise<ApiResponse<PotentialMatchesResponse>> {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+    });
+    return await this.makeRequest<PotentialMatchesResponse>(
+      `/users/me/shortlisted?${params}`,
+    );
+  }
+
   async likeProfile(userId: string): Promise<ApiResponse<LikeResponse>> {
     return await this.makeRequest<LikeResponse>(`/matches/${userId}/like`, {
       method: "POST",
@@ -664,10 +688,52 @@ class ApiService {
   }
 
   // Messaging APIs
+  async createConversation(
+    userId: string,
+  ): Promise<ApiResponse<CreateConversationResponse>> {
+    const normalizedUserId = this.normalizeNumericId(userId);
+    const response = await this.makeRequest<any>("/messages/conversations", {
+      method: "POST",
+      body: JSON.stringify({ userId: Number(normalizedUserId) }),
+    });
+
+    if (response.success && response.data) {
+      return response as ApiResponse<CreateConversationResponse>;
+    }
+
+    const rawResponse: Record<string, any> = response as unknown as Record<string, any>;
+    if (rawResponse?.id) {
+      return {
+        success: true,
+        data: {
+          id: this.normalizeNumericId(String(rawResponse.id)),
+        },
+      };
+    }
+
+    return {
+      success: false,
+      message: response?.message || "Failed to create conversation",
+    };
+  }
+
   async getConversations(): Promise<ApiResponse<ConversationsResponse>> {
-    return await this.makeRequest<ConversationsResponse>(
+    const response = await this.makeRequest<ConversationsResponse>(
       "/messages/conversations",
     );
+
+    if (response.success && response.data?.conversations) {
+      response.data.conversations = response.data.conversations.map((conversation) => ({
+        ...conversation,
+        id: this.normalizeNumericId(conversation.id),
+        participant: {
+          ...conversation.participant,
+          id: this.normalizeNumericId(conversation.participant.id),
+        },
+      }));
+    }
+
+    return response;
   }
 
   async getConversationMessages(
@@ -675,24 +741,84 @@ class ApiService {
     limit = 50,
     before?: string,
   ): Promise<ApiResponse<ConversationMessagesResponse>> {
+    const normalizedConversationId = this.normalizeNumericId(conversationId);
     const params = new URLSearchParams({ limit: limit.toString() });
     if (before) params.append("before", before);
-    return await this.makeRequest<ConversationMessagesResponse>(
-      `/messages/conversations/${conversationId}?${params}`,
+    const response = await this.makeRequest<ConversationMessagesResponse>(
+      `/messages/conversations/${normalizedConversationId}?${params}`,
     );
+
+    if (response.success && response.data) {
+      response.data.conversationId = this.normalizeNumericId(
+        response.data.conversationId,
+      );
+      response.data.participant.id = this.normalizeNumericId(
+        response.data.participant.id,
+      );
+      response.data.messages = response.data.messages.map((message) => ({
+        ...message,
+        id: String(message.id),
+        senderId: this.normalizeNumericId(String(message.senderId)),
+      }));
+    }
+
+    return response;
   }
 
   async sendMessage(
     conversationId: string,
     text: string,
   ): Promise<ApiResponse<SendMessageResponse>> {
-    return await this.makeRequest<SendMessageResponse>(
-      `/messages/conversations/${conversationId}`,
-      {
-        method: "POST",
-        body: JSON.stringify({ text }),
-      },
-    );
+    const normalizedConversationId = this.normalizeNumericId(conversationId);
+    const response = await this.makeRequest<any>(`/messages/messages`, {
+      method: "POST",
+      body: JSON.stringify({
+        conversationId: Number(normalizedConversationId),
+        message: text,
+      }),
+    });
+    const rawResponse: Record<string, any> = response as unknown as Record<string, any>;
+
+    if (response.success && response.data) {
+      return response as ApiResponse<SendMessageResponse>;
+    }
+
+    if (rawResponse?.id && rawResponse?.message) {
+      return {
+        success: true,
+        data: {
+          messageId: `msg_${rawResponse.id}`,
+          text: rawResponse.message,
+          timestamp: rawResponse.sentAt,
+          conversationId: String(rawResponse.conversationId),
+          senderId: String(rawResponse.senderId),
+        },
+      };
+    }
+
+    return {
+      success: false,
+      message: response?.message || "Failed to send message",
+    };
+  }
+
+  async markConversationRead(
+    conversationId: string,
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    const normalizedConversationId = this.normalizeNumericId(conversationId);
+    return await this.makeRequest<{ success: boolean }>("/messages/messages/read", {
+      method: "POST",
+      body: JSON.stringify({ conversationId: Number(normalizedConversationId) }),
+    });
+  }
+
+  async registerPushToken(
+    expoPushToken: string,
+  ): Promise<ApiResponse<{ registered: boolean }>> {
+    return await this.makeRequest<{ registered: boolean }>("/notifications/push-token", {
+      method: "POST",
+      body: JSON.stringify({ expoPushToken }),
+    });
   }
 
   // Settings APIs
@@ -732,7 +858,7 @@ class ApiService {
       offset: offset.toString(),
     });
     return await this.makeRequest<SentRequestsResponse>(
-      `/requests/sent?${params}`,
+      `/interaction/requests/sent?${params}`,
     );
   }
 
@@ -745,28 +871,45 @@ class ApiService {
       offset: offset.toString(),
     });
     return await this.makeRequest<ReceivedRequestsResponse>(
-      `/requests/received?${params}`,
+      `/interaction/requests/received?${params}`,
     );
   }
 
   async acceptConnectionRequest(
-    requestId: string,
-  ): Promise<ApiResponse<AcceptRequestResponse>> {
-    return await this.makeRequest<AcceptRequestResponse>(
-      `/requests/${requestId}/accept`,
+    senderId: string,
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    const normalizedSenderId = this.normalizeNumericId(senderId);
+    return await this.makeRequest<{ success: boolean }>(
+      `/interaction/interests/accept`,
       {
         method: "POST",
+        body: JSON.stringify({ senderId: Number(normalizedSenderId) }),
       },
     );
   }
 
   async declineConnectionRequest(
-    requestId: string,
-  ): Promise<ApiResponse<DeclineRequestResponse>> {
-    return await this.makeRequest<DeclineRequestResponse>(
-      `/requests/${requestId}/decline`,
+    senderId: string,
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    const normalizedSenderId = this.normalizeNumericId(senderId);
+    return await this.makeRequest<{ success: boolean }>(
+      `/interaction/interests/reject`,
       {
         method: "POST",
+        body: JSON.stringify({ senderId: Number(normalizedSenderId) }),
+      },
+    );
+  }
+
+  async cancelConnectionRequest(
+    receiverId: string,
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    const normalizedReceiverId = this.normalizeNumericId(receiverId);
+    return await this.makeRequest<{ success: boolean }>(
+      `/interaction/interests/cancel`,
+      {
+        method: "POST",
+        body: JSON.stringify({ receiverId: Number(normalizedReceiverId) }),
       },
     );
   }

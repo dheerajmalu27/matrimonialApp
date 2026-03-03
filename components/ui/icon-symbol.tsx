@@ -27,6 +27,7 @@ const MAPPING = {
   "line.horizontal.3": "menu",
   magnifyingglass: "search",
   "message.fill": "message",
+  "star.fill": "star",
   "arrow.right.square": "logout",
   "location.fill": "location-on",
   "line.3.horizontal.decrease.circle": "filter-list",

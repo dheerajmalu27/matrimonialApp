@@ -1,10 +1,13 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { API_CONFIG } from "@/constants/config";
 import { apiService } from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -16,52 +19,52 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { io, Socket } from "socket.io-client";
 
 interface Message {
   id: string;
   text: string;
   timestamp: string;
-  isSent: boolean;
+  senderId: string;
+  isRead: boolean;
+  status?: "sending" | "sent" | "failed";
 }
 
 interface Conversation {
   id: string;
+  participantId: string;
   name: string;
-  image: string;
+  image?: string;
+  gender?: string;
   isOnline: boolean;
 }
 
 const formatMessageTime = (timestamp: string) => {
-  const now = new Date();
   const messageTime = new Date(timestamp);
-  const diffInMs = now.getTime() - messageTime.getTime();
-  const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-  const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-
-  if (diffInMinutes < 1) {
-    return "Just now";
-  } else if (diffInMinutes < 60) {
-    return `${diffInMinutes}m ago`;
-  } else if (diffInHours < 24) {
-    return `${diffInHours}h ago`;
-  } else if (diffInDays === 1) {
-    return "Yesterday";
-  } else if (diffInDays < 7) {
-    return `${diffInDays}d ago`;
-  } else {
-    return messageTime.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      ...(messageTime.getFullYear() !== now.getFullYear() && {
-        year: "2-digit",
-      }),
-    });
+  if (Number.isNaN(messageTime.getTime())) {
+    return "";
   }
+
+  return messageTime.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
+
+const normalizeId = (id: string | number) => {
+  const match = String(id).match(/(\d+)/);
+  return match ? match[1] : String(id);
+};
+
+const getSocketServerUrl = () => {
+  return API_CONFIG.BASE_URL.replace(/\/api\/v\d+\/?$/, "");
+};
+
+const TYPING_STOP_DELAY_MS = 1000;
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams();
+  const conversationId = useMemo(() => normalizeId(String(id || "")), [id]);
   const insets = useSafeAreaInsets();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -69,13 +72,22 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isParticipantTyping, setIsParticipantTyping] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+  const flatListRef = useRef<FlatList<Message> | null>(null);
+  const isTypingRef = useRef(false);
+  const typingStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const getUserId = async () => {
       try {
         const userId = await AsyncStorage.getItem("userId");
-        setCurrentUserId(userId);
-      } catch (err) {
+        if (userId) {
+          setCurrentUserId(normalizeId(userId));
+        } else {
+          setError("Please login again to use chat");
+        }
+      } catch {
         setError("Failed to initialize chat");
       }
     };
@@ -84,16 +96,133 @@ export default function ChatScreen() {
   }, []);
 
   useEffect(() => {
-    if (currentUserId && id) {
+    if (currentUserId && conversationId) {
       fetchConversation();
     }
-  }, [currentUserId, id]);
+  }, [currentUserId, conversationId]);
+
+  useEffect(() => {
+    if (!currentUserId || !conversationId) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      loadConversationMessages(conversationId, false);
+    }, 8000);
+
+    return () => clearInterval(interval);
+  }, [currentUserId, conversationId]);
+
+  useEffect(() => {
+    if (!currentUserId || !conversationId) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const setupSocket = async () => {
+      const token = await AsyncStorage.getItem("accessToken");
+      if (!token || !isMounted) {
+        return;
+      }
+
+      const socket = io(getSocketServerUrl(), {
+        transports: ["websocket"],
+        auth: { token },
+      });
+
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        socket.emit("join-conversation", Number(conversationId));
+      });
+
+      socket.on("online-users", (onlineUserIds: Array<string | number>) => {
+        setConversation((prev) => {
+          if (!prev) return prev;
+          const isOnline = onlineUserIds
+            .map((value) => normalizeId(value))
+            .includes(normalizeId(prev.participantId));
+          return { ...prev, isOnline };
+        });
+      });
+
+      socket.on("receive-message", (payload: any) => {
+        if (normalizeId(payload?.conversationId) !== conversationId) {
+          return;
+        }
+
+        const incomingId = String(payload?.id || `socket_${Date.now()}`);
+        const incomingMessage: Message = {
+          id: incomingId,
+          text: String(payload?.text || ""),
+          timestamp: String(payload?.timestamp || new Date().toISOString()),
+          senderId: normalizeId(String(payload?.senderId || "")),
+          isRead: Boolean(payload?.isRead),
+          status: "sent",
+        };
+
+        if (!incomingMessage.text.trim()) {
+          return;
+        }
+
+        setMessages((prev) => {
+          if (prev.some((message) => message.id === incomingMessage.id)) {
+            return prev;
+          }
+          return [...prev, incomingMessage];
+        });
+
+        if (incomingMessage.senderId !== currentUserId) {
+          setIsParticipantTyping(false);
+          markCurrentConversationAsRead();
+        }
+      });
+
+      socket.on("typing-start", (payload: { userId?: string | number }) => {
+        const typingUserId = normalizeId(String(payload?.userId || ""));
+        if (typingUserId && typingUserId !== normalizeId(String(currentUserId || ""))) {
+          setIsParticipantTyping(true);
+        }
+      });
+
+      socket.on("typing-stop", (payload: { userId?: string | number }) => {
+        const typingUserId = normalizeId(String(payload?.userId || ""));
+        if (typingUserId && typingUserId !== normalizeId(String(currentUserId || ""))) {
+          setIsParticipantTyping(false);
+        }
+      });
+    };
+
+    setupSocket();
+
+    return () => {
+      if (isTypingRef.current) {
+        socketRef.current?.emit("typing-stop", { conversationId: Number(conversationId) });
+      }
+      if (typingStopTimeoutRef.current) {
+        clearTimeout(typingStopTimeoutRef.current);
+      }
+      isMounted = false;
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
+  }, [conversationId, currentUserId]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      });
+    }
+  }, [messages.length]);
 
   const fetchConversation = async () => {
     try {
       setLoading(true);
       setError(null);
-      await loadConversationMessages(id as string);
+      await loadConversationMessages(conversationId, true);
+      await markCurrentConversationAsRead();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load chat");
     } finally {
@@ -101,87 +230,253 @@ export default function ChatScreen() {
     }
   };
 
-  const loadConversationMessages = async (conversationId: string) => {
+  const loadConversationMessages = async (
+    targetConversationId: string,
+    allowErrorState = true,
+  ) => {
     try {
-      const response = await apiService.getConversationMessages(conversationId);
+      const response = await apiService.getConversationMessages(targetConversationId);
 
       if (response.success && response.data) {
         const participant = response.data.participant;
         setConversation({
-          id: participant.id,
+          id: targetConversationId,
+          participantId: normalizeId(participant.id),
           name: participant.name,
-          image: participant.profileImage || "https://via.placeholder.com/150",
+          image: participant.profileImage,
+          gender: participant.gender,
           isOnline: false,
         });
 
         const mappedMessages = response.data.messages.map((msg) => ({
-          id: msg.id,
+          id: String(msg.id),
           text: msg.text,
-          timestamp: formatMessageTime(msg.timestamp),
-          isSent: msg.senderId === currentUserId,
+          timestamp: msg.timestamp,
+          senderId: normalizeId(String(msg.senderId)),
+          isRead: Boolean(msg.isRead),
+          status: "sent" as const,
         }));
 
         setMessages(mappedMessages);
-      } else {
+      } else if (allowErrorState) {
         setError(response.message || "Failed to load messages");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load messages");
+      if (allowErrorState) {
+        setError(err instanceof Error ? err.message : "Failed to load messages");
+      }
+    }
+  };
+
+  const markCurrentConversationAsRead = async () => {
+    try {
+      await apiService.markConversationRead(conversationId);
+    } catch {
+      return;
+    }
+  };
+
+  const promptUpgradeForVideoCall = () => {
+    Alert.alert(
+      "Upgrade Required",
+      "Video call is available only for Premium users.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Upgrade", onPress: () => router.push("/settings") },
+      ],
+    );
+  };
+
+  const canStartVideoCall = async () => {
+    try {
+      const monetization = await apiService.getMonetizationConfig();
+      if (monetization.success && monetization.data?.user?.activePlan !== "premium") {
+        promptUpgradeForVideoCall();
+        return false;
+      }
+      return true;
+    } catch {
+      return true;
     }
   };
 
   const handleSendMessage = async () => {
     if (newMessage.trim() && conversation) {
+      const text = newMessage.trim();
+      const temporaryId = `temp_${Date.now()}`;
+
+      if (isTypingRef.current) {
+        socketRef.current?.emit("typing-stop", { conversationId: Number(conversationId) });
+        isTypingRef.current = false;
+      }
+      if (typingStopTimeoutRef.current) {
+        clearTimeout(typingStopTimeoutRef.current);
+        typingStopTimeoutRef.current = null;
+      }
+
+      const temporaryMessage: Message = {
+        id: temporaryId,
+        text,
+        timestamp: new Date().toISOString(),
+        senderId: String(currentUserId || ""),
+        isRead: false,
+        status: "sending",
+      };
+
+      setMessages((prev) => [...prev, temporaryMessage]);
+      setNewMessage("");
+
       try {
         const response = await apiService.sendMessage(
           conversation.id,
-          newMessage.trim(),
+          text,
         );
 
         if (response.success && response.data) {
-          const message: Message = {
+          const sentMessage: Message = {
             id: response.data.messageId,
             text: response.data.text,
-            timestamp: formatMessageTime(response.data.timestamp),
-            isSent: true,
+            timestamp: response.data.timestamp,
+            senderId: normalizeId(String(response.data.senderId || currentUserId || "")),
+            isRead: false,
+            status: "sent",
           };
-          setMessages((prev) => [...prev, message]);
-          setNewMessage("");
+
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === temporaryId ? sentMessage : message,
+            ),
+          );
         } else {
-          setError(response.message || "Failed to send message");
+          setMessages((prev) => prev.filter((message) => message.id !== temporaryId));
+          setNewMessage(text);
+          const message = response.message || "Failed to send message";
+          setError(message);
+          if (/daily message limit reached/i.test(message)) {
+            Alert.alert(
+              "Daily Limit Reached",
+              "Free users can send up to 5 messages per day. Upgrade to Premium for unlimited messaging.",
+              [
+                { text: "Later", style: "cancel" },
+                { text: "Upgrade", onPress: () => router.push("/settings") },
+              ],
+            );
+          }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to send message");
+        setMessages((prev) => prev.filter((message) => message.id !== temporaryId));
+        setNewMessage(text);
+        const message = err instanceof Error ? err.message : "Failed to send message";
+        setError(message);
+        if (/daily message limit reached/i.test(message)) {
+          Alert.alert(
+            "Daily Limit Reached",
+            "Free users can send up to 5 messages per day. Upgrade to Premium for unlimited messaging.",
+            [
+              { text: "Later", style: "cancel" },
+              { text: "Upgrade", onPress: () => router.push("/settings") },
+            ],
+          );
+        }
       }
     }
   };
 
-  const renderMessage = ({ item }: { item: Message }) => (
-    <View
-      style={[
-        styles.messageContainer,
-        item.isSent ? styles.sentMessage : styles.receivedMessage,
-      ]}
-    >
-      <Text style={[styles.messageText, item.isSent && styles.sentMessageText]}>
-        {item.text}
-      </Text>
-      <View style={styles.timestampRow}>
-        <Text style={[styles.timestamp, item.isSent && styles.sentTimestamp]}>
-          {item.timestamp}
+  const handleMessageInputChange = (text: string) => {
+    setNewMessage(text);
+
+    if (!socketRef.current || !conversationId) {
+      return;
+    }
+
+    if (text.trim().length === 0) {
+      if (isTypingRef.current) {
+        socketRef.current.emit("typing-stop", { conversationId: Number(conversationId) });
+        isTypingRef.current = false;
+      }
+      if (typingStopTimeoutRef.current) {
+        clearTimeout(typingStopTimeoutRef.current);
+        typingStopTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (!isTypingRef.current) {
+      socketRef.current.emit("typing-start", { conversationId: Number(conversationId) });
+      isTypingRef.current = true;
+    }
+
+    if (typingStopTimeoutRef.current) {
+      clearTimeout(typingStopTimeoutRef.current);
+    }
+
+    typingStopTimeoutRef.current = setTimeout(() => {
+      if (isTypingRef.current) {
+        socketRef.current?.emit("typing-stop", { conversationId: Number(conversationId) });
+        isTypingRef.current = false;
+      }
+      typingStopTimeoutRef.current = null;
+    }, TYPING_STOP_DELAY_MS);
+  };
+
+  const handleStartVideoCall = async () => {
+    if (!conversation) return;
+
+    const canCall = await canStartVideoCall();
+    if (!canCall) return;
+
+    router.push(
+      `/video-call/${conversation.id}?targetUserId=${conversation.participantId}&targetName=${encodeURIComponent(
+        conversation.name,
+      )}&initiator=1`,
+    );
+  };
+
+  const renderMessage = ({ item }: { item: Message }) => {
+    const isSent = normalizeId(item.senderId) === normalizeId(String(currentUserId || ""));
+    return (
+      <View
+        style={[
+          styles.messageContainer,
+          isSent ? styles.sentMessage : styles.receivedMessage,
+        ]}
+      >
+        <Text style={[styles.messageText, isSent && styles.sentMessageText]}>
+          {item.text}
         </Text>
-        {item.isSent && (
-          <Text style={styles.readReceipt}>✓</Text>
-        )}
+        <View style={styles.timestampRow}>
+          <Text style={[styles.timestamp, isSent && styles.sentTimestamp]}>
+            {formatMessageTime(item.timestamp)}
+          </Text>
+          {isSent && (
+            <Text style={styles.readReceipt}>
+              {item.status === "sending" ? "⏳" : item.isRead ? "✓✓" : "✓"}
+            </Text>
+          )}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
+
+  if (loading) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#E91E63" />
+          <ThemedText style={styles.loadingText}>Loading chat...</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
 
   if (!conversation) {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ThemedText style={styles.loadingText}>Loading chat...</ThemedText>
+          <ThemedText style={styles.loadingText}>Unable to open conversation</ThemedText>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchConversation}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       </ThemedView>
     );
@@ -194,7 +489,6 @@ export default function ChatScreen() {
       keyboardVerticalOffset={0}
     >
       <ThemedView style={styles.container}>
-        {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity
             style={styles.backButton}
@@ -205,10 +499,32 @@ export default function ChatScreen() {
           
           <View style={styles.headerContent}>
             <View style={styles.avatarContainer}>
-              <Image 
-                source={{ uri: conversation.image }} 
-                style={styles.avatar} 
-              />
+              {conversation.image ? (
+                <Image
+                  source={{ uri: conversation.image }}
+                  style={styles.avatar}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.avatar,
+                    styles.avatarFallback,
+                    (conversation.gender || "").toLowerCase() === "female"
+                      ? styles.avatarFallbackFemale
+                      : (conversation.gender || "").toLowerCase() === "male"
+                        ? styles.avatarFallbackMale
+                        : styles.avatarFallbackNeutral,
+                  ]}
+                >
+                  <Text style={styles.avatarFallbackText}>
+                    {(conversation.gender || "").toLowerCase() === "female"
+                      ? "♀"
+                      : (conversation.gender || "").toLowerCase() === "male"
+                        ? "♂"
+                        : "👤"}
+                  </Text>
+                </View>
+              )}
               {conversation.isOnline && (
                 <View style={styles.onlineIndicator}>
                   <View style={styles.onlineDot} />
@@ -222,22 +538,45 @@ export default function ChatScreen() {
               <View style={styles.statusRow}>
                 <View style={[
                   styles.statusDot,
-                  conversation.isOnline ? styles.onlineDot : styles.offlineDot
+                  isParticipantTyping
+                    ? styles.typingDot
+                    : conversation.isOnline
+                      ? styles.onlineDot
+                      : styles.offlineDot
                 ]} />
                 <Text style={styles.headerStatus}>
-                  {conversation.isOnline ? "Online" : "Offline"}
+                  {isParticipantTyping
+                    ? "Typing..."
+                    : conversation.isOnline
+                      ? "Online"
+                      : "Offline"}
                 </Text>
               </View>
             </View>
           </View>
           
-          <TouchableOpacity style={styles.callButton}>
-            <Text style={styles.callIcon}>📞</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.callButton}>
+              <Text style={styles.callIcon}>📞</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.videoCallButton} onPress={handleStartVideoCall}>
+              <Text style={styles.callIcon}>🎥</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Messages */}
+        {error && (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.errorBanner}
+            onPress={() => setError(null)}
+          >
+            <Text style={styles.errorText}>{error}</Text>
+          </TouchableOpacity>
+        )}
+
         <FlatList
+          ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
@@ -252,7 +591,6 @@ export default function ChatScreen() {
           }
         />
 
-        {/* Input Area */}
         <View style={[
           styles.inputContainer, 
           { paddingBottom: Math.max(insets.bottom, 15) }
@@ -267,7 +605,17 @@ export default function ChatScreen() {
               placeholder="Type a message..."
               placeholderTextColor="#999"
               value={newMessage}
-              onChangeText={setNewMessage}
+              onChangeText={handleMessageInputChange}
+              onBlur={() => {
+                if (isTypingRef.current) {
+                  socketRef.current?.emit("typing-stop", { conversationId: Number(conversationId) });
+                  isTypingRef.current = false;
+                }
+                if (typingStopTimeoutRef.current) {
+                  clearTimeout(typingStopTimeoutRef.current);
+                  typingStopTimeoutRef.current = null;
+                }
+              }}
               multiline
               maxLength={1000}
             />
@@ -307,6 +655,32 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: "#666",
+    marginTop: 8,
+  },
+  retryButton: {
+    marginTop: 14,
+    backgroundColor: "#E91E63",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  errorBanner: {
+    backgroundColor: "#fee2e2",
+    borderColor: "#fecaca",
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginHorizontal: 12,
+    marginTop: 10,
+    borderRadius: 10,
+  },
+  errorText: {
+    color: "#b91c1c",
+    fontSize: 13,
   },
   header: {
     flexDirection: "row",
@@ -351,6 +725,24 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#E91E63",
   },
+  avatarFallback: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarFallbackFemale: {
+    backgroundColor: "#F8BBD0",
+  },
+  avatarFallbackMale: {
+    backgroundColor: "#BBDEFB",
+  },
+  avatarFallbackNeutral: {
+    backgroundColor: "#E0E0E0",
+  },
+  avatarFallbackText: {
+    fontSize: 20,
+    color: "#37474F",
+    fontWeight: "700",
+  },
   onlineIndicator: {
     position: "absolute",
     bottom: 0,
@@ -373,6 +765,12 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     backgroundColor: "#999",
+  },
+  typingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#EAB308",
   },
   headerInfo: {
     flex: 1,
@@ -408,6 +806,19 @@ const styles = StyleSheet.create({
   },
   callIcon: {
     fontSize: 20,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  videoCallButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fce4ec",
   },
   messagesContainer: {
     padding: 15,
